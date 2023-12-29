@@ -223,7 +223,6 @@ func main() {
 		default:
 			storageClass = types.StorageClassStandard
 		}
-		storageClass = types.StorageClassStandard
 
 		archiveTmp := filepath.Clean(tmpStorageToBuildArchives)
 		os.MkdirAll(archiveTmp, os.ModePerm)
