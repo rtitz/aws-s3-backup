@@ -167,6 +167,8 @@ func main() {
 	}
 	// End of: Define and check parameters
 
+	fmt.Printf("%s %s\n", variables.AppName, variables.AppVersion)
+
 	// Create new session
 	ctx := context.TODO()
 	cfg := awsUtils.CreateAwsSession(ctx, *awsProfile, *awsRegion)

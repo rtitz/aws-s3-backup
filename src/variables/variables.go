@@ -1,5 +1,9 @@
 package variables
 
+// App name and version
+var AppName string = "AWS-S3-BACKUP"
+var AppVersion string = "1.0.0"
+
 // AWS AUTHENTICATION
 var AwsAuthCredentialsFrom string = "awsCliProfile" // "files" or "awsCliProfile"
 
