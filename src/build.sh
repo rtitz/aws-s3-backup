@@ -2,7 +2,6 @@
 
 platforms=( "darwin/arm64" "darwin/amd64" "linux/arm" "linux/arm64" "linux/amd64" "linux/386" "windows/386" "windows/amd64" )
 
-#package_name="aws-s3-backup"
 package_name=$(cd .. && basename $(pwd) && cd - >/dev/null 2>&1)
 #version=$(git tag | tail -n1)
 output_directory="../bin/"
