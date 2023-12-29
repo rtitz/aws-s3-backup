@@ -10,7 +10,7 @@ import (
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
-func CreateAwsSession(ctx context.Context) aws.Config {
+func CreateAwsSession(ctx context.Context, awsProfile, awsRegion string) aws.Config {
 
 	var cfg aws.Config
 	var err error
@@ -27,13 +27,13 @@ func CreateAwsSession(ctx context.Context) aws.Config {
 		)
 	} else if variables.AwsAuthCredentialsFrom == "awsCliProfile" {
 		cfg, err = config.LoadDefaultConfig(ctx,
-			config.WithRegion(variables.AwsCliRegion),
-			config.WithSharedConfigProfile(variables.AwsCliProfile),
+			config.WithRegion(awsRegion),
+			config.WithSharedConfigProfile(awsProfile),
 		)
 	}
 
 	if err != nil {
-		log.Fatalf("ERROR: %v\n", err)
+		log.Fatalf("ERROR! Failed to load AWS CLI Profile '%s' (%v)\n", awsProfile, err)
 	}
 
 	// Test credentials

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -83,9 +84,11 @@ func buildArchive(files []string, archiveFile string) error {
 	return nil
 }
 
-func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) error {
+func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) (string, error) {
 	var parts string
+	var path string
 	for i, part := range listOfParts {
+		path = filepath.Clean(filepath.Dir(part))
 		part = filepath.Base(part)
 		if i == 0 { // First iteration in this loop; do not add a space in the beginning
 			parts = parts + part
@@ -93,17 +96,28 @@ func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) 
 			parts = parts + " " + part
 		}
 	}
-	fmt.Printf("cat %s > %s\n", parts, archive)
-	// TODO: Write to a file
-	return nil
+	contentOfHowToFile := fmt.Sprintf("cat %s > %s && rm -f %s %s\n", parts, archive, parts, archive+variables.HowToBuildFileSuffix)
+
+	// Create HowToFile file
+	howToFile := path + "/" + archive + variables.HowToBuildFileSuffix
+	out, err := os.Create(howToFile)
+	if err != nil {
+		log.Fatalln("Error writing how-to-file:", err)
+	}
+	defer out.Close()
+	w := bufio.NewWriter(out)
+	w.WriteString(contentOfHowToFile)
+	w.Flush()
+
+	return howToFile, nil
 }
 
 func main() {
 
 	// Define and check parameters
 	inputFile := flag.String("json", "", "JSON file that contains the input parameters")
-	// TODO: PARSE AWS PROFILE
-	// TODO: PARSE AWS REGION
+	awsProfile := flag.String("profile", variables.AwsCliProfileDefault, "Specify the AWS CLI profile, for example: 'default'")
+	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'default'")
 	flag.Parse()
 
 	if *inputFile == "" {
@@ -116,14 +130,9 @@ func main() {
 
 	// Create new session
 	ctx := context.TODO()
-	cfg := awsUtils.CreateAwsSession(ctx)
+	cfg := awsUtils.CreateAwsSession(ctx, *awsProfile, *awsRegion)
 
 	currentWorkingDirectory, _ := os.Getwd()
-
-	/*fileContent, err := getInputOld()
-	if err != nil {
-		log.Fatalf("FAILED TO GET INPUT: %v", err)
-	}*/
 
 	os.Chdir(currentWorkingDirectory)
 	tasks, err := getInput(*inputFile)
@@ -140,7 +149,6 @@ func main() {
 		fmt.Println()
 	}*/
 
-	//for _, item := range fileContent {
 	for _, task := range tasks {
 		path := task.Source
 		s3Bucket := task.S3Bucket
@@ -152,11 +160,15 @@ func main() {
 		switch task.StorageClass {
 		case "STANDARD":
 			storageClass = types.StorageClassStandard
-		case "ONEZONE_IA":
-			storageClass = types.StorageClassOnezoneIa
-		case "DEEP_ARCHIVE":
+		case "STANDARD_IA": // Min storage duration in days: 30 and 128kB
+			storageClass = types.StorageClassStandardIa
+		case "DEEP_ARCHIVE": // Min storage duration in days: 180 and 40kB
 			storageClass = types.StorageClassDeepArchive
-		case "REDUCED_REDUNDANCY":
+		case "GLACIER_IR": // Min storage duration in days: 90 and 128kB
+			storageClass = types.StorageClassGlacierIr
+		case "GLACIER": // Min storage duration in days: 90 and 128kB
+			storageClass = types.StorageClassGlacier
+		case "REDUCED_REDUNDANCY": // Only 99.99% durability! Not recommended!
 			storageClass = types.StorageClassReducedRedundancy
 		default:
 			storageClass = types.StorageClassStandard
@@ -179,20 +191,43 @@ func main() {
 			log.Fatalf("FAILED TO SPLIT: %v", err)
 		}
 
-		if len(listOfParts) > 1 { // Remove original (unsplitted) archive, if it has been splitted
+		numberOfParts := len(listOfParts)
+		if numberOfParts > 1 { // Remove original (unsplitted) archive, if it has been splitted
 			os.Remove(fullArchivePath)
-			createTxtHowToCombineSplittedArchive(archive, listOfParts)
+			HowToFile, err := createTxtHowToCombineSplittedArchive(archive, listOfParts)
+			if err != nil {
+				log.Fatalf("FAILED TO CREATE HOW-TO-FILE: %v", err)
+			}
+			listOfParts = append(listOfParts, HowToFile)
 		}
 
-		for _, part := range listOfParts {
-			fmt.Println("S3 path: " + s3Prefix + archivePath + filepath.Base(part))
+		for i, part := range listOfParts {
+			partNumber := i + 1
+			fmt.Println()
+			fmt.Println("S3 path: s3://" + s3Bucket + "/" + s3Prefix + archivePath + filepath.Base(part))
 			fmt.Println("Local path: " + part)
 			fmt.Println("StorageClass: " + storageClass)
-			log.Printf("Upload...")
+
+			if partNumber > numberOfParts { // HowToFile
+				log.Printf("Upload (HowToFile) ...")
+			} else if numberOfParts > 1 {
+				log.Printf("Upload (%d/%d) ...", partNumber, numberOfParts)
+			} else {
+				log.Printf("Upload...")
+			}
 			if err := awsUtils.PutObject(ctx, cfg, part, s3Bucket, s3Prefix+archivePath+filepath.Base(part), storageClass); err != nil {
 				log.Fatalf("UPLOAD FAILED! %v", err)
 			}
-			log.Printf(" DONE!\n")
+
+			var percentage float64 = (float64(partNumber) / float64(numberOfParts)) * float64(100)
+			if percentage == 100 {
+				log.Printf(" %.2f %% (%d/%d) UPLOADED - DONE!\n", percentage, partNumber, numberOfParts)
+			} else if partNumber > numberOfParts { // HowToFile
+				log.Printf(" HowToFile UPLOADED\n")
+			} else {
+				log.Printf(" %.2f %% (%d/%d) UPLOADED\n", percentage, partNumber, numberOfParts)
+			}
+
 			if variables.CleanupAfterUpload {
 				os.Remove(part)
 			}

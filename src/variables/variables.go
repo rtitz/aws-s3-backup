@@ -6,13 +6,14 @@ var AwsAuthCredentialsFrom string = "awsCliProfile" // "files" or "awsCliProfile
 var AwsCredentialsFile string = "aws-credentials" // Used if AwsAuthCredentialsFrom is "files"
 var AwsConfigFile string = "aws-config"           // Used if AwsAuthCredentialsFrom is "files"
 
-var AwsCliProfile string = "default"  // Used if AwsAuthCredentialsFrom is "awsCliProfile"
-var AwsCliRegion string = "us-east-1" // Used if AwsAuthCredentialsFrom is "awsCliProfile"
+var AwsCliProfileDefault string = "default"  // Used if AwsAuthCredentialsFrom is "awsCliProfile"
+var AwsCliRegionDefault string = "us-east-1" // Used if AwsAuthCredentialsFrom is "awsCliProfile"
 // END OF: AWS AUTHENTICATION
 
 var UploadMethod string = "Disabled"       // PutObject or TransferManager or Disabled
 var SplitUploadsEachXMegaBytes int64 = 500 // If TransferManager is used
-var CleanupAfterUpload bool = false
+var CleanupAfterUpload bool = true
+var HowToBuildFileSuffix string = "-HowToBuild.txt"
 
 type Tasks struct {
 	Tasks []Task `json:"tasks"`
