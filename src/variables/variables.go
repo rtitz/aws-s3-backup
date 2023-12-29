@@ -14,6 +14,7 @@ var UploadMethod string = "Disabled"       // PutObject or TransferManager or Di
 var SplitUploadsEachXMegaBytes int64 = 500 // If TransferManager is used
 var CleanupAfterUpload bool = true
 var HowToBuildFileSuffix string = "-HowToBuild.txt"
+var ProcessedTrackingFile string = "processed.txt"
 
 type Tasks struct {
 	Tasks []Task `json:"tasks"`

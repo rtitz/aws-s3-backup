@@ -10,6 +10,7 @@ bin/*
 src/*credentials
 src/credentials*
 src/credentials
+src/processed.txt
 
 
 # Test binary, built with `go test -c`

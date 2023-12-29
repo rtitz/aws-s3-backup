@@ -64,6 +64,7 @@ func buildArchive(files []string, archiveFile string) error {
 	//files := []string{"build.sh", "go.mod", "go.sum", "main.go"}
 	//archiveFile := "output.tar.gz"
 
+	fmt.Println()
 	log.Println("Creating archive...")
 	// Create output file
 	out, err := os.Create(archiveFile)
@@ -112,6 +113,44 @@ func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) 
 	return howToFile, nil
 }
 
+func checkIfPathAlreadyProcessed(path string, write bool) (bool, error) {
+	if write {
+		// Create processed file
+		out, err := os.OpenFile(variables.ProcessedTrackingFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Fatalln("Error writing 'processed' file:", err)
+		}
+		defer out.Close()
+		w := bufio.NewWriter(out)
+		w.WriteString(path + "\n")
+		w.Flush()
+		out.Close()
+		return true, nil
+	} else { // Check if done
+		processed := false
+		if _, err := os.Stat(variables.ProcessedTrackingFile); errors.Is(err, os.ErrNotExist) {
+			//fmt.Println("file not exist")
+			return processed, nil
+		}
+		readFile, err := os.Open(variables.ProcessedTrackingFile)
+		if err != nil {
+			fmt.Println(err)
+		}
+		defer readFile.Close()
+		fileScanner := bufio.NewScanner(readFile)
+		fileScanner.Split(bufio.ScanLines)
+		for fileScanner.Scan() {
+			//fmt.Println(fileScanner.Text())
+			if fileScanner.Text() == path {
+				processed = true
+				break
+			}
+		}
+		readFile.Close()
+		return processed, nil
+	}
+}
+
 func main() {
 
 	// Define and check parameters
@@ -155,8 +194,17 @@ func main() {
 		s3Prefix := filepath.Clean(task.S3Prefix)
 		archiveSplitEachMB, _ := strconv.Atoi(task.ArchiveSplitEachMB)
 		tmpStorageToBuildArchives := task.TmpStorageToBuildArchives
-		var storageClass types.StorageClass
 
+		// Check if path is aleady processed
+		os.Chdir(currentWorkingDirectory)
+		processed, _ := checkIfPathAlreadyProcessed(path, false)
+		if processed {
+			log.Printf("SKIP - Path: '%s' already in '%s'!", path, variables.ProcessedTrackingFile)
+			continue
+		}
+
+		// StorageClasses
+		var storageClass types.StorageClass
 		switch task.StorageClass {
 		case "STANDARD":
 			storageClass = types.StorageClassStandard
@@ -178,13 +226,12 @@ func main() {
 		archiveTmp := filepath.Clean(tmpStorageToBuildArchives)
 		os.MkdirAll(archiveTmp, os.ModePerm)
 
-		c := []string{path}
+		c := []string{path} // This is the content for the backup
 
 		archivePath := filepath.Clean(filepath.Dir(path)) + "/"
 		archive := filepath.Base(path) + ".tar.gz"
 		archive = strings.ReplaceAll(archive, " ", "-") // REPLACE SPACE WITH -
 		fullArchivePath := archiveTmp + "/" + archive
-
 		buildArchive(c, fullArchivePath)
 		listOfParts, err := fileUtils.SplitArchive(fullArchivePath, int64(archiveSplitEachMB))
 		if err != nil {
@@ -233,6 +280,9 @@ func main() {
 			}
 		}
 
+		// Write path to file that records the processed paths
+		os.Chdir(currentWorkingDirectory)
+		checkIfPathAlreadyProcessed(path, true)
 	}
 
 }
