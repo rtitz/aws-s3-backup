@@ -3,6 +3,7 @@ package fileUtils
 import (
 	"bufio"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -36,8 +37,9 @@ func GetFileInfo(file string) (*os.File, float64, float64, string, string, error
 	// SHA256 Checksum of File
 	h := sha256.New()
 	h.Write(bsOfFile)
-	bs := h.Sum(nil)
-	sha256checksum := fmt.Sprintf("%x\n", bs)
+	//bs := h.Sum(nil)
+	sha256checksum := hex.EncodeToString(h.Sum(nil))
+	//sha256checksum := fmt.Sprintf("%x\n", bs)
 
 	sizeRaw := float64(stat.Size())
 	size := sizeRaw

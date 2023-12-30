@@ -58,11 +58,14 @@ func getInput(inputJson string) ([]variables.InputData, error) {
 	return input, nil
 }
 
-func buildArchive(files []string, archiveFile string) error {
+func buildArchive(files []string, archiveFile string) (string, error) {
 	// Files which to include in the tar.gz archive
 	//files := []string{"example.txt", "test/test.txt"}
 	//files := []string{"build.sh", "go.mod", "go.sum", "main.go"}
 	//archiveFile := "output.tar.gz"
+
+	archiveFile = archiveFile + "." + variables.ArchiveExtension
+	archiveFile = strings.ReplaceAll(archiveFile, " ", "-") // REPLACE SPACE WITH -
 
 	fmt.Println()
 	log.Println("Creating archive...")
@@ -74,15 +77,39 @@ func buildArchive(files []string, archiveFile string) error {
 	defer out.Close()
 
 	// Create the archive and write the output to the "out" Writer
-	err = fileUtils.CreateArchive(files, out)
+	var keepArchiveFile bool
+	keepArchiveFile, err = fileUtils.CreateArchive(files, out)
 	if err != nil {
+		out.Close()
 		os.Remove(archiveFile)
 		log.Fatalln("Error creating archive:", err)
 	}
+	if keepArchiveFile {
+		log.Println("Archive created successfully")
+	} else { // Archive not created since it is already an archive
+		os.Remove(archiveFile)
+		archiveFile = strings.TrimSuffix(archiveFile, "."+variables.ArchiveExtension)
 
-	fmt.Println("Archive created successfully")
+		file := files[0]
+		source, err := os.Open(file) //open the source file
+		if err != nil {
+			panic(err)
+		}
+		defer source.Close()
+
+		destination, err := os.Create(archiveFile) //create the destination file
+		if err != nil {
+			panic(err)
+		}
+		defer destination.Close()
+		_, err = io.Copy(destination, source) //copy the contents of source to destination file
+		if err != nil {
+			panic(err)
+		}
+		log.Println("Existing archive copied successfully")
+	}
 	// END OF: TAR.GZ
-	return nil
+	return archiveFile, nil
 }
 
 func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) (string, error) {
@@ -230,10 +257,12 @@ func main() {
 		c := []string{path} // This is the content for the backup
 
 		archivePath := filepath.Clean(filepath.Dir(path)) + "/"
-		archive := filepath.Base(path) + ".tar.gz"
-		archive = strings.ReplaceAll(archive, " ", "-") // REPLACE SPACE WITH -
-		fullArchivePath := archiveTmp + "/" + archive
-		buildArchive(c, fullArchivePath)
+		archive := filepath.Base(path)
+		//archive = archive + "." + variables.ArchiveExtension
+		//archive = strings.ReplaceAll(archive, " ", "-") // REPLACE SPACE WITH -
+		//fullArchivePath :=
+		fullArchivePath, _ := buildArchive(c, archiveTmp+"/"+archive)
+		fmt.Println(fullArchivePath)
 		listOfParts, err := fileUtils.SplitArchive(fullArchivePath, int64(archiveSplitEachMB))
 		if err != nil {
 			log.Fatalf("FAILED TO SPLIT: %v", err)

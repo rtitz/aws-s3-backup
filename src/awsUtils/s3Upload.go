@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/rtitz/aws-s3-backup/fileUtils"
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
@@ -23,19 +24,18 @@ func PutObject(ctx context.Context, cfg aws.Config, file, bucket, object string,
 	}
 	defer f.Close()
 
-	/*
-		_, sizeRaw, size, unit, sha256checksum, err := fileUtils.GetFileInfo(file)
-		_ = sizeRaw
-		_ = sha256checksum
+	// Get file info
+	_, sizeRaw, size, unit, sha256checksum, err := fileUtils.GetFileInfo(file)
+	_ = sizeRaw
+	_ = size
+	_ = unit
 
-		if err != nil {
-			log.Fatalf("ERROR: %v\n", err)
-		}
-
-		//sha256checksumInBase64 := base64.StdEncoding.EncodeToString([]byte(sha256checksum))
-		log.Printf("Upload %s (%.2f %s) to %s key: %s ... \n", file, size, unit, bucket, object)
-		//log.Println("Pre-calculated checksum: ", sha256checksum, sha256checksumInBase64)
-	*/
+	if err != nil {
+		log.Fatalf("ERROR GETTING FILE INFO: %v\n", err)
+	}
+	//sha256checksumInBase64 := base64.StdEncoding.EncodeToString([]byte(sha256checksum))
+	//log.Printf("Upload %s (%.2f %s) to %s key: %s ... \n", file, size, unit, bucket, object)
+	//log.Println("Pre-calculated checksum: ", sha256checksum, sha256checksumInBase64)
 
 	clientS3 := s3.NewFromConfig(cfg)
 	//output, err := clientS3.PutObject(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &object, StorageClass: types.StorageClassStandard, Body: f})
@@ -69,7 +69,30 @@ func PutObject(ctx context.Context, cfg aws.Config, file, bucket, object string,
 		if err != nil {
 			log.Fatalf("FAILED PutObject %v\n", err)
 		}
+
+		// Verify checksum
 		_ = output
+		_ = sha256checksum
+		/*uploadedObjectChecksum := *output.ChecksumSHA256
+		uploadedObjectChecksumDecoded, _ := base64.StdEncoding.DecodeString(uploadedObjectChecksum)
+		localSha256checksumBase64 := fmt.Sprintf("%q\n", base64.StdEncoding.EncodeToString([]byte(sha256checksum)))
+
+		//log.Println("UPLOADED ", uploadedObjectChecksum)
+		//log.Println("UPLOADED DECODE ", uploadedObjectChecksumDecoded)
+
+		//log.Println("LOCAL ", sha256checksum)
+		//log.Println("LOCAL B64 ", base64.URLEncoding.EncodeToString([]byte(sha256checksum)))
+		//log.Println("LOCAL HEX ", hex.EncodeToString([]byte(sha256checksum)))
+		//log.Println("LOCAL HEX B64 ", base64.StdEncoding.EncodeToString([]byte(hex.EncodeToString([]byte(sha256checksum)))))
+
+		fmt.Println()
+		if uploadedObjectChecksum == sha256checksum {
+			log.Printf("Checksum %s : OK", uploadedObjectChecksum)
+		} else {
+			log.Printf("CHECKSUM FAIL! - Checksum of uploaded object: %s / Checksum of local file: %s (%s)\n", uploadedObjectChecksum, localSha256checksumBase64, sha256checksum)
+			return errors.New("CHECKSUM FAIL")
+		}*/
+
 	} else if variables.UploadMethod == "Disabled" {
 		time.Sleep(time.Millisecond * 3000)
 		log.Println("Upload Disabled!")

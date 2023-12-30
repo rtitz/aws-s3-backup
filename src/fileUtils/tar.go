@@ -9,9 +9,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/rtitz/aws-s3-backup/variables"
 )
 
-func CreateArchive(files []string, buf io.Writer) error {
+func CreateArchive(files []string, buf io.Writer) (bool, error) {
 	// Create new Writers for gzip and tar
 	// These writers are chained. Writing to the tar writer will
 	// write to the gzip writer which in turn will write to
@@ -24,15 +27,22 @@ func CreateArchive(files []string, buf io.Writer) error {
 	// Iterate over files and add them to the tar archive
 	for _, file := range files {
 		file := filepath.Clean(file)
+
+		// Do not create archive if it is already an archive
+		if strings.HasSuffix(file, "."+variables.ArchiveExtension) && len(files) == 1 {
+			log.Printf("%s is already a %s archive. - Skip build archive, copy instead...\n", file, variables.ArchiveExtension)
+			return false, nil
+		}
+
 		os.Chdir(filepath.Dir(file))
 		//fmt.Println("PWD:", filepath.Dir(file))
 		//fmt.Println("BASE:", filepath.Base(file))
 		err := addToArchive(tw, filepath.Base(file))
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func addToArchive(tw *tar.Writer, path string) error {
@@ -55,7 +65,6 @@ func addToArchive(tw *tar.Writer, path string) error {
 	}
 
 	if fileInfo.IsDir() {
-		//os.Chdir(filepath.Dir(path))
 		err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				fmt.Println(err)
