@@ -59,15 +59,9 @@ func getInput(inputJson string) ([]variables.InputData, error) {
 }
 
 func buildArchive(files []string, archiveFile string) (string, error) {
-	// Files which to include in the tar.gz archive
-	//files := []string{"example.txt", "test/test.txt"}
-	//files := []string{"build.sh", "go.mod", "go.sum", "main.go"}
-	//archiveFile := "output.tar.gz"
-
 	archiveFile = archiveFile + "." + variables.ArchiveExtension
 	archiveFile = strings.ReplaceAll(archiveFile, " ", "-") // REPLACE SPACE WITH -
 
-	fmt.Println()
 	log.Println("Creating archive...")
 	// Create output file
 	out, err := os.Create(archiveFile)
@@ -194,7 +188,7 @@ func main() {
 	}
 	// End of: Define and check parameters
 
-	fmt.Printf("%s %s\n", variables.AppName, variables.AppVersion)
+	fmt.Printf("%s %s\n\n", variables.AppName, variables.AppVersion)
 
 	// Create new session
 	ctx := context.TODO()
@@ -248,6 +242,7 @@ func main() {
 		case "REDUCED_REDUNDANCY": // Only 99.99% durability! Not recommended!
 			storageClass = types.StorageClassReducedRedundancy
 		default:
+			log.Printf("WARNING: StorageClass '%s' not supported! Using 'STANDARD' instead!", task.StorageClass)
 			storageClass = types.StorageClassStandard
 		}
 
@@ -262,7 +257,6 @@ func main() {
 		//archive = strings.ReplaceAll(archive, " ", "-") // REPLACE SPACE WITH -
 		//fullArchivePath :=
 		fullArchivePath, _ := buildArchive(c, archiveTmp+"/"+archive)
-		fmt.Println(fullArchivePath)
 		listOfParts, err := fileUtils.SplitArchive(fullArchivePath, int64(archiveSplitEachMB))
 		if err != nil {
 			log.Fatalf("FAILED TO SPLIT: %v", err)
@@ -280,10 +274,9 @@ func main() {
 
 		for i, part := range listOfParts {
 			partNumber := i + 1
-			fmt.Println()
-			fmt.Println("S3 path: s3://" + s3Bucket + "/" + s3Prefix + archivePath + filepath.Base(part))
-			fmt.Println("Local path: " + part)
-			fmt.Println("StorageClass: " + storageClass)
+			log.Println("S3 path: s3://" + s3Bucket + "/" + s3Prefix + archivePath + filepath.Base(part))
+			log.Println("Local path: " + part)
+			log.Println("StorageClass: " + storageClass)
 
 			if partNumber > numberOfParts { // HowToFile
 				log.Printf("Upload (HowToFile) ...")
@@ -293,14 +286,21 @@ func main() {
 				log.Printf("Upload...")
 			}
 			if err := awsUtils.PutObject(ctx, cfg, part, s3Bucket, s3Prefix+archivePath+filepath.Base(part), storageClass); err != nil {
+				//time.Sleep(time.Millisecond * 500)
+				errCleanup := awsUtils.DeleteObj(ctx, cfg, s3Bucket, s3Prefix+archivePath+filepath.Base(part))
+				if errCleanup != nil {
+					log.Printf("FAILED TO CLEANUP BROKEN UPLOAD: s3://%s/%s ERROR: %v", s3Bucket, s3Prefix+archivePath+filepath.Base(part), errCleanup)
+				}
 				log.Fatalf("UPLOAD FAILED! %v", err)
 			}
 
 			var percentage float64 = (float64(partNumber) / float64(numberOfParts)) * float64(100)
 			if percentage == 100 {
 				log.Printf(" %.2f %% (%d/%d) UPLOADED - DONE!\n", percentage, partNumber, numberOfParts)
+				fmt.Printf("%s\n\n", variables.OutputSeperator)
 			} else if partNumber > numberOfParts { // HowToFile
 				log.Printf(" HowToFile UPLOADED\n")
+				fmt.Printf("%s\n\n", variables.OutputSeperator)
 			} else {
 				log.Printf(" %.2f %% (%d/%d) UPLOADED\n", percentage, partNumber, numberOfParts)
 			}

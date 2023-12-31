@@ -14,12 +14,15 @@ var AwsCliProfileDefault string = "default"  // Used if AwsAuthCredentialsFrom i
 var AwsCliRegionDefault string = "us-east-1" // Used if AwsAuthCredentialsFrom is "awsCliProfile"
 // END OF: AWS AUTHENTICATION
 
-var UploadMethod string = "Disabled"       // PutObject or TransferManager or Disabled
+var UploadMethod string = "PutObject"      // PutObject or TransferManager or Disabled
 var SplitUploadsEachXMegaBytes int64 = 500 // If TransferManager is used
 var CleanupAfterUpload bool = true
 var HowToBuildFileSuffix string = "-HowToBuild.txt"
 var ProcessedTrackingFile string = "processed.txt"
 var ArchiveExtension string = "tar.gz"
+var ChecksumMode = "md5" // sha256 or md5 / If md5 then the S3 ETag is used
+
+var OutputSeperator = "============================================================================"
 
 type Tasks struct {
 	Tasks []Task `json:"tasks"`

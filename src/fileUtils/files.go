@@ -2,8 +2,8 @@ package fileUtils
 
 import (
 	"bufio"
+	"crypto/md5"
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -11,7 +11,7 @@ import (
 	"strconv"
 )
 
-func GetFileInfo(file string) (*os.File, float64, float64, string, string, error) {
+func GetFileInfo(file, checksumMode string) (*os.File, float64, float64, string, string, error) {
 
 	f, errF := os.Open(file)
 	if errF != nil {
@@ -34,13 +34,27 @@ func GetFileInfo(file string) (*os.File, float64, float64, string, string, error
 		return nil, 0, 0, "", "", err
 	}
 
-	// SHA256 Checksum of File
-	h := sha256.New()
-	h.Write(bsOfFile)
-	//bs := h.Sum(nil)
-	sha256checksum := hex.EncodeToString(h.Sum(nil))
-	//sha256checksum := fmt.Sprintf("%x\n", bs)
+	// Checksum
+	var checksum string
+	if checksumMode == "sha256" {
+		// SHA256 Checksum of File
+		h := sha256.New()
+		h.Write(bsOfFile)
+		bs := h.Sum(nil)
+		//sha256checksum := hex.EncodeToString(h.Sum(nil))
+		sha256checksum := fmt.Sprintf("%x", bs)
+		checksum = sha256checksum
+	} else if checksumMode == "md5" {
+		// MD5 Checksum of File
+		h := md5.New()
+		h.Write(bsOfFile)
+		bs := h.Sum(nil)
+		//md5checksum := hex.EncodeToString(h.Sum(nil))
+		md5checksum := fmt.Sprintf("%x", bs)
+		checksum = md5checksum
+	}
 
+	// Size
 	sizeRaw := float64(stat.Size())
 	size := sizeRaw
 	unit := "B"
@@ -76,5 +90,5 @@ func GetFileInfo(file string) (*os.File, float64, float64, string, string, error
 		unit = "B"
 	}
 
-	return f, sizeRaw, size, unit, sha256checksum, nil
+	return f, sizeRaw, size, unit, checksum, nil
 }

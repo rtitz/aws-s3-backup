@@ -10,10 +10,9 @@ import (
 
 func DeleteObj(ctx context.Context, cfg aws.Config, bucket, object string) error {
 
-	log.Printf("Delete %s in bucket: %s ... \n", object, bucket)
+	log.Printf("Delete: s3://%s/%s ... \n", bucket, object)
 	clientS3 := s3.NewFromConfig(cfg)
 
-	clientS3.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &bucket, Key: &object})
-	return nil
-
+	_, err := clientS3.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &bucket, Key: &object})
+	return err
 }
