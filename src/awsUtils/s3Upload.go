@@ -111,8 +111,6 @@ func PutObject(ctx context.Context, cfg aws.Config, file, bucket, object string,
 		// Verify checksum
 		if checksumMode == "sha256" {
 			uploadedObjectChecksum := *output.ChecksumSHA256
-			//uploadedObjectChecksumDecoded, _ := base64.StdEncoding.DecodeString(uploadedObjectChecksum)
-
 			if uploadedObjectChecksum == checksum {
 				log.Printf("Checksum %s : OK", uploadedObjectChecksum)
 			} else {
