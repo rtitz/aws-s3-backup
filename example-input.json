@@ -4,7 +4,7 @@
             "S3Bucket": "my-s3-backup-bucket",
             "S3Prefix": "backup",
             "StorageClass": "STANDARD",
-            "ArchiveSplitEachMB": "100",
+            "ArchiveSplitEachMB": "250",
             "TmpStorageToBuildArchives": "/mnt/external/tmp",
             "Content": [
                 "/home/rtitz/git/aws-s3-backup/src/main.go",

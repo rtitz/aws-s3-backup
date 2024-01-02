@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/md5"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -41,9 +42,10 @@ func GetFileInfo(file, checksumMode string) (*os.File, float64, float64, string,
 		h := sha256.New()
 		h.Write(bsOfFile)
 		bs := h.Sum(nil)
-		//sha256checksum := hex.EncodeToString(h.Sum(nil))
-		sha256checksum := fmt.Sprintf("%x", bs)
-		checksum = sha256checksum
+		//sha256checksum := fmt.Sprintf("%x", bs)
+		//checksum = sha256checksum
+		checksum = string(base64.StdEncoding.EncodeToString(bs))
+
 	} else if checksumMode == "md5" {
 		// MD5 Checksum of File
 		h := md5.New()

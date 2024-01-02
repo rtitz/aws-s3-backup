@@ -20,9 +20,12 @@ This [link](https://calculator.aws/) can help you calculating the chages
     "Statement": [
         {
             "Action": [
-                "s3:Put*",
+                "s3:DeleteObject*",
+                "s3:PutObject*"
             ],
-            "Resource": "arn:aws:s3:::NAME-OF-YOUR-S3-BUCKET/*",
+            "Resource": [
+                "arn:aws:s3:::NAME-OF-YOUR-S3-BUCKET/*"
+            ],
             "Effect": "Allow"
         }
     ]
@@ -41,6 +44,12 @@ aws-s3-backup_macos-arm64 -help
 ```
 aws-s3-backup_macos-arm64 -json ~/tmp/input.json
 ```
+
+  * Execute with **your** input.json and specify an AWS cli profile and AWS region
+```
+aws-s3-backup_macos-arm64 -json ~/tmp/input.json -profile test -region eu-central-1
+```
+**NOTE:** Default AWS CLI profile is: 'default' and default AWS region is 'us-east-1'.
 
 ## StorageClasses (for input.json)
 

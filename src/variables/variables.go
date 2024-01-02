@@ -2,13 +2,12 @@ package variables
 
 // App name and version
 var AppName string = "AWS-S3-BACKUP"
-var AppVersion string = "1.0.0"
+var AppVersion string = "1.0.1"
 
 // AWS AUTHENTICATION
 var AwsAuthCredentialsFrom string = "awsCliProfile" // "files" or "awsCliProfile"
-
-var AwsCredentialsFile string = "aws-credentials" // Used if AwsAuthCredentialsFrom is "files"
-var AwsConfigFile string = "aws-config"           // Used if AwsAuthCredentialsFrom is "files"
+var AwsCredentialsFile string = "aws-credentials"   // Used if AwsAuthCredentialsFrom is "files"
+var AwsConfigFile string = "aws-config"             // Used if AwsAuthCredentialsFrom is "files"
 
 var AwsCliProfileDefault string = "default"  // Used if AwsAuthCredentialsFrom is "awsCliProfile"
 var AwsCliRegionDefault string = "us-east-1" // Used if AwsAuthCredentialsFrom is "awsCliProfile"
@@ -20,7 +19,7 @@ var CleanupAfterUpload bool = true
 var HowToBuildFileSuffix string = "-HowToBuild.txt"
 var ProcessedTrackingFile string = "processed.txt"
 var ArchiveExtension string = "tar.gz"
-var ChecksumMode = "md5" // sha256 or md5 / If md5 then the S3 ETag is used
+var ChecksumMode = "sha256" // sha256 or md5 / If md5 then the S3 ETag is used
 
 var OutputSeperator = "============================================================================"
 

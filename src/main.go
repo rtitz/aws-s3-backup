@@ -201,15 +201,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("FAILED TO PARSE %s : %v", *inputFile, err)
 	}
-	/*for _, task := range tasks {
-		fmt.Println(task.Source)
-		fmt.Println(task.LocalPath)
-		fmt.Println(task.RemotePath)
-		fmt.Println(task.S3Prefix)
-		fmt.Println(task.S3Bucket)
-		fmt.Println(task.Sha256CheckSum)
-		fmt.Println()
-	}*/
 
 	for _, task := range tasks {
 		path := task.Source
