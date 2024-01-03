@@ -87,9 +87,6 @@ func GetFileInfo(file, checksumMode string) (*os.File, float64, float64, string,
 	} else if value, _ := strconv.ParseFloat(kbR, 64); value >= 1 {
 		size = value
 		unit = "KB"
-	} else if value, _ := strconv.ParseFloat(kbR, 64); value < 1 {
-		size = value
-		unit = "B"
 	}
 
 	return f, sizeRaw, size, unit, checksum, nil

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/rtitz/aws-s3-backup/awsUtils"
@@ -50,6 +51,7 @@ func getInput(inputJson string) ([]variables.InputData, error) {
 				StorageClass:              tasks.Tasks[i].StorageClass,
 				ArchiveSplitEachMB:        tasks.Tasks[i].ArchiveSplitEachMB,
 				TmpStorageToBuildArchives: tasks.Tasks[i].TmpStorageToBuildArchives,
+				CleanupTmpStorage:         tasks.Tasks[i].CleanupTmpStorage,
 				Sha256CheckSum:            "0",
 			}
 			input = append(input, newEntry)
@@ -118,6 +120,9 @@ func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) 
 			parts = parts + " " + part
 		}
 	}
+	if !strings.HasSuffix(archive, "."+variables.ArchiveExtension) {
+		archive = archive + "." + variables.ArchiveExtension
+	}
 	contentOfHowToFile := fmt.Sprintf("cat %s > %s && rm -f %s %s\n", parts, archive, parts, archive+variables.HowToBuildFileSuffix)
 
 	// Create HowToFile file
@@ -134,26 +139,29 @@ func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) 
 	return howToFile, nil
 }
 
-func checkIfPathAlreadyProcessed(path string, write bool) (bool, error) {
+func checkIfPathAlreadyProcessed(processedTrackingFile, path string, write bool) (bool, error) {
 	if write {
 		// Create processed file
-		out, err := os.OpenFile(variables.ProcessedTrackingFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		out, err := os.OpenFile(processedTrackingFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Fatalln("Error writing 'processed' file:", err)
 		}
 		defer out.Close()
 		w := bufio.NewWriter(out)
-		w.WriteString(path + "\n")
+		dt := time.Now()
+		timestampStr := dt.Format(time.RFC1123)
+		timestampUnixStr := strconv.Itoa(int(dt.Unix()))
+		w.WriteString(path + "\n * Timestamp of upload: " + timestampUnixStr + " (" + timestampStr + ")\n\n")
 		w.Flush()
 		out.Close()
 		return true, nil
 	} else { // Check if done
 		processed := false
-		if _, err := os.Stat(variables.ProcessedTrackingFile); errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(processedTrackingFile); errors.Is(err, os.ErrNotExist) {
 			//fmt.Println("file not exist")
 			return processed, nil
 		}
-		readFile, err := os.Open(variables.ProcessedTrackingFile)
+		readFile, err := os.Open(processedTrackingFile)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -172,6 +180,7 @@ func checkIfPathAlreadyProcessed(path string, write bool) (bool, error) {
 	}
 }
 
+// START
 func main() {
 
 	// Define and check parameters
@@ -186,6 +195,7 @@ func main() {
 		fmt.Printf("\n")
 		os.Exit(999)
 	}
+	processedTrackingFile := *inputFile + variables.ProcessedTrackingSuffix
 	// End of: Define and check parameters
 
 	fmt.Printf("%s %s\n\n", variables.AppName, variables.AppVersion)
@@ -195,11 +205,23 @@ func main() {
 	cfg := awsUtils.CreateAwsSession(ctx, *awsProfile, *awsRegion)
 
 	currentWorkingDirectory, _ := os.Getwd()
+	filesUploaded := false
+
+	// Checksum mode
+	var checksumMode string
+	if variables.ChecksumMode == "sha256" {
+		checksumMode = "sha256"
+	} else if variables.ChecksumMode == "md5" {
+		checksumMode = "md5"
+	}
 
 	os.Chdir(currentWorkingDirectory)
 	tasks, err := getInput(*inputFile)
 	if err != nil {
 		log.Fatalf("FAILED TO PARSE %s : %v", *inputFile, err)
+	}
+	if len(tasks) < 1 {
+		log.Fatalf("NO TASKS FOUND! Please check that the json in your parameters is in correct format!")
 	}
 
 	for _, task := range tasks {
@@ -208,12 +230,28 @@ func main() {
 		s3Prefix := filepath.Clean(task.S3Prefix)
 		archiveSplitEachMB, _ := strconv.Atoi(task.ArchiveSplitEachMB)
 		tmpStorageToBuildArchives := task.TmpStorageToBuildArchives
+		cleanupTmpStorage := task.CleanupTmpStorage
+
+		var cleanupTmpStorageBool bool
+		switch strings.ToLower(cleanupTmpStorage) {
+		case "true":
+			cleanupTmpStorageBool = true
+		case "yes":
+			cleanupTmpStorageBool = true
+		case "false":
+			cleanupTmpStorageBool = false
+		case "no":
+			cleanupTmpStorageBool = false
+		default:
+			cleanupTmpStorageBool = variables.CleanupAfterUploadDefault
+		}
+		fmt.Println(cleanupTmpStorageBool)
 
 		// Check if path is aleady processed
 		os.Chdir(currentWorkingDirectory)
-		processed, _ := checkIfPathAlreadyProcessed(path, false)
+		processed, _ := checkIfPathAlreadyProcessed(processedTrackingFile, path, false)
 		if processed {
-			log.Printf("SKIP - Path: '%s' already in '%s'!", path, variables.ProcessedTrackingFile)
+			log.Printf("SKIP - Path: '%s' already in '%s'!", path, processedTrackingFile)
 			continue
 		}
 
@@ -265,8 +303,17 @@ func main() {
 
 		for i, part := range listOfParts {
 			partNumber := i + 1
+
+			// Get file info
+			_, sizeRaw, size, unit, checksum, err := fileUtils.GetFileInfo(part, checksumMode)
+			_ = sizeRaw
+			if err != nil {
+				log.Fatalf("ERROR GETTING FILE INFO: %v\n", err)
+			}
+
 			log.Println("S3 path: s3://" + s3Bucket + "/" + s3Prefix + archivePath + filepath.Base(part))
 			log.Println("Local path: " + part)
+			log.Printf("Size: %.2f %s\n", size, unit)
 			log.Println("StorageClass: " + storageClass)
 
 			if partNumber > numberOfParts { // HowToFile
@@ -276,8 +323,8 @@ func main() {
 			} else {
 				log.Printf("Upload...")
 			}
-			if err := awsUtils.PutObject(ctx, cfg, part, s3Bucket, s3Prefix+archivePath+filepath.Base(part), storageClass); err != nil {
-				//time.Sleep(time.Millisecond * 500)
+			if err := awsUtils.PutObject(ctx, cfg, checksumMode, checksum, part, s3Bucket, s3Prefix+archivePath+filepath.Base(part), storageClass); err != nil {
+				time.Sleep(time.Millisecond * 200)
 				errCleanup := awsUtils.DeleteObj(ctx, cfg, s3Bucket, s3Prefix+archivePath+filepath.Base(part))
 				if errCleanup != nil {
 					log.Printf("FAILED TO CLEANUP BROKEN UPLOAD: s3://%s/%s ERROR: %v", s3Bucket, s3Prefix+archivePath+filepath.Base(part), errCleanup)
@@ -296,14 +343,40 @@ func main() {
 				log.Printf(" %.2f %% (%d/%d) UPLOADED\n", percentage, partNumber, numberOfParts)
 			}
 
-			if variables.CleanupAfterUpload {
+			if cleanupTmpStorageBool {
 				os.Remove(part)
 			}
+			filesUploaded = true
 		}
 
 		// Write path to file that records the processed paths
 		os.Chdir(currentWorkingDirectory)
-		checkIfPathAlreadyProcessed(path, true)
+		checkIfPathAlreadyProcessed(processedTrackingFile, path, true)
+	}
+
+	// Put additional data about backup in S3 Bucket
+	if filesUploaded {
+		additionalUploadOk := true
+		listOfAdditionalFiles := []string{
+			*inputFile,
+			processedTrackingFile,
+		}
+		s3Bucket := tasks[0].S3Bucket
+		s3Prefix := filepath.Clean(tasks[0].S3Prefix) + "/"
+		log.Println("Upload of additional JSON files...")
+		for _, part := range listOfAdditionalFiles {
+			// Get file info
+			_, _, _, _, checksum, _ := fileUtils.GetFileInfo(part, checksumMode)
+			if err := awsUtils.PutObject(ctx, cfg, checksumMode, checksum, part, s3Bucket, s3Prefix+filepath.Base(part), types.StorageClassStandard); err != nil {
+				time.Sleep(time.Millisecond * 200)
+				awsUtils.DeleteObj(ctx, cfg, s3Bucket, s3Prefix+filepath.Base(part))
+				log.Printf("UPLOAD OF ADDITIONAL JSON FILES FAILED! %v", err)
+				additionalUploadOk = false
+			}
+		}
+		if additionalUploadOk {
+			log.Println("Upload of additional JSON files: OK")
+		}
 	}
 
 }

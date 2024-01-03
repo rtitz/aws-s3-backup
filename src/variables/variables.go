@@ -2,7 +2,7 @@ package variables
 
 // App name and version
 var AppName string = "AWS-S3-BACKUP"
-var AppVersion string = "1.0.1"
+var AppVersion string = "1.0.2"
 
 // AWS AUTHENTICATION
 var AwsAuthCredentialsFrom string = "awsCliProfile" // "files" or "awsCliProfile"
@@ -15,9 +15,9 @@ var AwsCliRegionDefault string = "us-east-1" // Used if AwsAuthCredentialsFrom i
 
 var UploadMethod string = "PutObject"      // PutObject or TransferManager or Disabled
 var SplitUploadsEachXMegaBytes int64 = 500 // If TransferManager is used
-var CleanupAfterUpload bool = true
+var CleanupAfterUploadDefault bool = true
 var HowToBuildFileSuffix string = "-HowToBuild.txt"
-var ProcessedTrackingFile string = "processed.txt"
+var ProcessedTrackingSuffix string = "-Processed.txt"
 var ArchiveExtension string = "tar.gz"
 var ChecksumMode = "sha256" // sha256 or md5 / If md5 then the S3 ETag is used
 
@@ -33,6 +33,7 @@ type Task struct {
 	StorageClass              string   `json:"StorageClass"`
 	ArchiveSplitEachMB        string   `json:"ArchiveSplitEachMB"`
 	TmpStorageToBuildArchives string   `json:"TmpStorageToBuildArchives"`
+	CleanupTmpStorage         string   `json:"CleanupTmpStorage"`
 	Content                   []string `json:"Content"`
 }
 
@@ -45,6 +46,7 @@ type InputData struct {
 	StorageClass              string
 	ArchiveSplitEachMB        string
 	TmpStorageToBuildArchives string
+	CleanupTmpStorage         string
 	Sha256CheckSum            string
 }
 
