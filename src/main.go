@@ -139,7 +139,7 @@ func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) 
 	return howToFile, nil
 }
 
-func checkIfPathAlreadyProcessed(processedTrackingFile, path string, write bool) (bool, error) {
+func checkIfPathAlreadyProcessed(processedTrackingFile, path string, listOfParts []string, write bool) (bool, error) {
 	if write {
 		// Create processed file
 		out, err := os.OpenFile(processedTrackingFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -151,7 +151,14 @@ func checkIfPathAlreadyProcessed(processedTrackingFile, path string, write bool)
 		dt := time.Now()
 		timestampStr := dt.Format(time.RFC1123)
 		timestampUnixStr := strconv.Itoa(int(dt.Unix()))
-		w.WriteString(path + "\n * Timestamp of upload: " + timestampUnixStr + " (" + timestampStr + ")\n\n")
+
+		if len(listOfParts) > 1 { // Splitted means HowTo exists as additional element in the listOfParts
+			listOfParts = listOfParts[:len(listOfParts)-1]
+		}
+		numberOfParts := len(listOfParts)
+
+		stringToWrite := path + "\n * Timestamp of upload: " + timestampUnixStr + " (" + timestampStr + ")\n * Number of file parts: " + strconv.Itoa(numberOfParts)
+		w.WriteString(stringToWrite + "\n\n")
 		w.Flush()
 		out.Close()
 		return true, nil
@@ -245,11 +252,10 @@ func main() {
 		default:
 			cleanupTmpStorageBool = variables.CleanupAfterUploadDefault
 		}
-		fmt.Println(cleanupTmpStorageBool)
 
 		// Check if path is aleady processed
 		os.Chdir(currentWorkingDirectory)
-		processed, _ := checkIfPathAlreadyProcessed(processedTrackingFile, path, false)
+		processed, _ := checkIfPathAlreadyProcessed(processedTrackingFile, path, []string{}, false)
 		if processed {
 			log.Printf("SKIP - Path: '%s' already in '%s'!", path, processedTrackingFile)
 			continue
@@ -351,7 +357,7 @@ func main() {
 
 		// Write path to file that records the processed paths
 		os.Chdir(currentWorkingDirectory)
-		checkIfPathAlreadyProcessed(processedTrackingFile, path, true)
+		checkIfPathAlreadyProcessed(processedTrackingFile, path, listOfParts, true)
 	}
 
 	// Put additional data about backup in S3 Bucket
