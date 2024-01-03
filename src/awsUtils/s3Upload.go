@@ -12,11 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/rtitz/aws-s3-backup/fileUtils"
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
-func PutObject(ctx context.Context, cfg aws.Config, file, bucket, object string, storageClass types.StorageClass) error {
+func PutObject(ctx context.Context, cfg aws.Config, checksumMode, checksum, file, bucket, object string, storageClass types.StorageClass) error {
 
 	// https://aws.github.io/aws-sdk-go-v2/docs/sdk-utilities/s3/
 
@@ -26,31 +25,7 @@ func PutObject(ctx context.Context, cfg aws.Config, file, bucket, object string,
 	}
 	defer f.Close()
 
-	// Checksum mode
-	var checksumMode string
-	if variables.ChecksumMode == "sha256" {
-		checksumMode = "sha256"
-	} else if variables.ChecksumMode == "md5" {
-		checksumMode = "md5"
-	}
-
-	// Get file info
-	_, sizeRaw, size, unit, checksum, err := fileUtils.GetFileInfo(file, checksumMode)
-	_ = sizeRaw
-	_ = size
-	_ = unit
-
-	if err != nil {
-		log.Fatalf("ERROR GETTING FILE INFO: %v\n", err)
-	}
-	//sha256checksumInBase64 := base64.StdEncoding.EncodeToString([]byte(sha256checksum))
-	//log.Printf("Upload %s (%.2f %s) to %s key: %s ... \n", file, size, unit, bucket, object)
-	//log.Println("Pre-calculated checksum: ", sha256checksum, sha256checksumInBase64)
-
-	//localChecksumBase64 := fmt.Sprintf("%q\n", base64.StdEncoding.EncodeToString([]byte(checksum)))
-
 	clientS3 := s3.NewFromConfig(cfg)
-	//output, err := clientS3.PutObject(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &object, StorageClass: types.StorageClassStandard, Body: f})
 
 	if variables.UploadMethod == "TransferManager" {
 		//uploader := manager.NewUploader(clientS3)
