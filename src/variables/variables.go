@@ -1,8 +1,14 @@
 package variables
 
+import (
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+)
+
 // App name and version
 var AppName string = "AWS-S3-BACKUP"
-var AppVersion string = "1.0.2"
+var AppVersion string = "1.0.3"
 
 // AWS AUTHENTICATION
 var AwsAuthCredentialsFrom string = "awsCliProfile" // "files" or "awsCliProfile"
@@ -53,4 +59,37 @@ type InputData struct {
 func (InputDataF *InputData) AddLocalPath(path string) []string {
 	InputDataF.LocalPath = append(InputDataF.LocalPath, path)
 	return InputDataF.LocalPath
+}
+
+// =========================================================
+// Restore specific
+
+type Contents struct {
+	Contents       []Content `json:"Contents"`
+	RequestCharged string    `json:"RequestCharged"`
+}
+
+type Content struct {
+	Key          string    `json:"Key"`
+	Size         int64     `json:"Size"`
+	StorageClass string    `json:"StorageClass"`
+	LastModified time.Time `json:"LastModified"`
+}
+
+var JsonOutputFile string = "generated-restore-input.json"
+var DefaultDaysRestoreIsAvailable int = 1
+var DefaultRestoreObjectTier types.Tier = types.TierBulk
+
+var RestoreNotNeededMessage = "Not needed"
+var RestoreNotInitiatedMessage = "Not initiated"
+var RestoreOngoingMessage = "ongoing [ Takes up to 48 hours! ]"
+var RestoreDoneMessage = "restored"
+
+var StorageClassesNeedRestore []string
+
+func init() {
+	StorageClassesNeedRestore = []string{
+		"DEEP_ARCHIVE",
+		"GLACIER",
+	}
 }
