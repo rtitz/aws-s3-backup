@@ -11,10 +11,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/rtitz/aws-s3-backup/awsUtils"
 	"github.com/rtitz/aws-s3-backup/fileUtils"
@@ -187,30 +189,9 @@ func checkIfPathAlreadyProcessed(processedTrackingFile, path string, listOfParts
 	}
 }
 
-// START
-func main() {
-
-	// Define and check parameters
-	inputFile := flag.String("json", "", "JSON file that contains the input parameters")
-	awsProfile := flag.String("profile", variables.AwsCliProfileDefault, "Specify the AWS CLI profile, for example: 'default'")
-	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'default'")
-	flag.Parse()
-
-	if *inputFile == "" {
-		fmt.Printf("Parameter missing / wrong! Try again and specify the following parameters.\n\nParameter list:\n\n")
-		flag.PrintDefaults()
-		fmt.Printf("\n")
-		os.Exit(999)
-	}
-	processedTrackingFile := *inputFile + variables.ProcessedTrackingSuffix
-	// End of: Define and check parameters
-
-	fmt.Printf("%s %s\n\n", variables.AppName, variables.AppVersion)
-
-	// Create new session
-	ctx := context.TODO()
-	cfg := awsUtils.CreateAwsSession(ctx, *awsProfile, *awsRegion)
-
+func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error {
+	fmt.Println("MODE: BACKUP")
+	processedTrackingFile := inputFile + variables.ProcessedTrackingSuffix
 	currentWorkingDirectory, _ := os.Getwd()
 	filesUploaded := false
 
@@ -223,9 +204,9 @@ func main() {
 	}
 
 	os.Chdir(currentWorkingDirectory)
-	tasks, err := getInput(*inputFile)
+	tasks, err := getInput(inputFile)
 	if err != nil {
-		log.Fatalf("FAILED TO PARSE %s : %v", *inputFile, err)
+		log.Fatalf("FAILED TO PARSE %s : %v", inputFile, err)
 	}
 	if len(tasks) < 1 {
 		log.Fatalf("NO TASKS FOUND! Please check that the json in your parameters is in correct format!")
@@ -364,7 +345,7 @@ func main() {
 	if filesUploaded {
 		additionalUploadOk := true
 		listOfAdditionalFiles := []string{
-			*inputFile,
+			inputFile,
 			processedTrackingFile,
 		}
 		s3Bucket := tasks[0].S3Bucket
@@ -383,6 +364,187 @@ func main() {
 		if additionalUploadOk {
 			log.Println("Upload of additional JSON files: OK")
 		}
+	}
+	return nil
+}
+
+// =================================================================================================================
+
+func listBuckets(ctx context.Context, cfg aws.Config) error {
+	listOfBuckets, err := awsUtils.ListBuckets(ctx, cfg)
+	if err != nil {
+		log.Fatalln("Error listing bucekts:", err)
+	}
+
+	for _, bucket := range listOfBuckets {
+		fmt.Printf("%s\n", bucket)
+	}
+	return nil
+}
+
+func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, downloadLocation string) ([]variables.InputData, error) {
+	var input []variables.InputData
+	jsonFile, err := os.Open(inputJson)
+	if err != nil {
+		return input, err
+	}
+	defer jsonFile.Close()
+
+	byteValue, _ := io.ReadAll(jsonFile)
+	var contents variables.Contents
+	json.Unmarshal(byteValue, &contents)
+
+	for i := 0; i < len(contents.Contents); i++ {
+		var restoreStatus string = variables.RestoreNotNeededMessage
+		if slices.Contains(variables.StorageClassesNeedRestore, contents.Contents[i].StorageClass) {
+			objectInfo, _ := awsUtils.HeadObject(ctx, cfg, bucket, contents.Contents[i].Key)
+			restoreStatus = variables.RestoreNotInitiatedMessage
+			if objectInfo.Restore != nil { // Restore initiated
+				restoreStatus = *objectInfo.Restore
+				if strings.Contains(restoreStatus, "ongoing-request=\"true\"") {
+					restoreStatus = variables.RestoreOngoingMessage + " (Details: " + *objectInfo.Restore + ")"
+				} else if strings.Contains(restoreStatus, "ongoing-request=\"false\"") {
+					restoreStatus = variables.RestoreDoneMessage + " (Details: " + *objectInfo.Restore + ")"
+				}
+			}
+		}
+		_, size, unit := fileUtils.FileSizeUnitCalculation(float64(contents.Contents[i].Size))
+
+		fmt.Printf("%s \n * Size: %.2f %s\n * StorageClass: %s\n * RestoreStatus: %s\n", contents.Contents[i].Key, size, unit, contents.Contents[i].StorageClass, restoreStatus)
+		if restoreStatus == "Not initiated" {
+			c := askForConfirmation(" Request restore of this object?", true, true)
+			if c {
+				if err := awsUtils.RestoreObject(ctx, cfg, bucket, contents.Contents[i].Key); err != nil {
+					fmt.Println("Failed to restore object: ", err.Error())
+				} else {
+					fmt.Println("Restore requested!")
+				}
+			}
+		}
+
+		if strings.Contains(restoreStatus, "ongoing-request=\"false\"") || (restoreStatus == variables.RestoreNotNeededMessage) {
+			fmt.Println(" Downloading ...")
+			downloaded, err := awsUtils.GetObject(ctx, cfg, bucket, contents.Contents[i].Key, downloadLocation)
+			if err != nil {
+				fmt.Println("Download failed! ", err.Error())
+			} else if err == nil && downloaded {
+				fmt.Println("Download: OK")
+			} else if err == nil && !downloaded {
+				fmt.Println("Download: SKIPPED (Already downloaded!)")
+			}
+		}
+		fmt.Printf("\n")
+	}
+	return input, nil
+}
+
+func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFile, downloadLocation string) error {
+	fmt.Println("MODE: RESTORE")
+
+	if bucket == "" {
+		fmt.Println("No bucket specified")
+		fmt.Println("Here is the list of buckets you can specify with parameter -bucket")
+		fmt.Println()
+		err := listBuckets(ctx, cfg)
+		fmt.Println()
+		return err
+	}
+
+	if downloadLocation == "" {
+		fmt.Println("Download location not specified")
+		fmt.Printf("Parameter missing / wrong! Try again and specify the following parameters.\n\nParameter list:\n\n")
+		flag.PrintDefaults()
+		fmt.Printf("\n")
+		os.Exit(999)
+	}
+
+	if inputFile == "" && prefix == "" { // Build an input file is not given, matching the JSON output of commend: aws s3api list-objects-v2 --bucket s3-bucket
+		outputFile := variables.JsonOutputFile
+		awsUtils.ListObjects(ctx, cfg, bucket, prefix, outputFile)
+		inputFile = outputFile
+	}
+
+	if prefix != "" {
+		var outputFile string
+		if _, err := os.Stat(inputFile); err == nil { // If inputFile exists
+			fmt.Printf("\nERROR: You filtered by prefix parameter and specified json parameter, but the JSON file exists! (%s)\nChoose a path for json parameter that does not exist or remove prefix parameter to take an existing json as input for restore!\n", inputFile)
+			os.Exit(2)
+		} else { // inputFile does not exist
+			outputFile = inputFile
+		}
+		if inputFile == "" {
+			outputFile = variables.JsonOutputFile
+		}
+		awsUtils.ListObjects(ctx, cfg, bucket, prefix, outputFile)
+		inputFile = outputFile
+	}
+
+	restoreObjects(ctx, cfg, bucket, inputFile, downloadLocation)
+	//os.Remove(jsonOutputFile)
+	fmt.Println("Done! ")
+
+	return nil
+}
+
+func askForConfirmation(s string, handleDefault, defaultValue bool) bool {
+	reader := bufio.NewReader(os.Stdin)
+	answers := "[y/n]"
+	if handleDefault && defaultValue {
+		answers = "[Y/n]"
+	} else if handleDefault && !defaultValue {
+		answers = "[y/N]"
+	}
+
+	for {
+		fmt.Printf("%s %s: ", s, answers)
+
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			log.Fatal(err)
+		}
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response == "y" || response == "yes" {
+			return true
+		} else if response == "n" || response == "no" {
+			return false
+		} else if handleDefault && response == "" {
+			return defaultValue
+		}
+	}
+}
+
+// START
+func main() {
+
+	// Define and check parameters
+	mode := flag.String("mode", "backup", "Operation mode (backup or restore)")
+	bucket := flag.String("bucket", "", "If mode is 'restore' you have to specify the bucket, in which your data is stored. Without this parameter you will get a list of Buckets printed.")
+	prefix := flag.String("prefix", "", "Specify a prefix to limit object list to objects in a specific 'folder' in the S3 bucket. (Example: 'archive')")
+	inputFile := flag.String("json", "", "JSON file that contains the input parameters")
+	downloadLocation := flag.String("destination", "", "Path / directory the restore should be downloaded to (Example: 'restore/')")
+	//combineDownloadedParts := flag.Bool("combineDownloadedParts", false, "Automatically combine downloaded splittet file parts to one single file after download")
+	awsProfile := flag.String("profile", variables.AwsCliProfileDefault, "Specify the AWS CLI profile, for example: 'default'")
+	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'default'")
+	flag.Parse()
+
+	if (*mode == "backup" && *inputFile == "") || (*mode != "backup" && *mode != "restore") {
+		fmt.Printf("Parameter missing / wrong! Try again and specify the following parameters.\n\nParameter list:\n\n")
+		flag.PrintDefaults()
+		fmt.Printf("\n")
+		os.Exit(999)
+	}
+	// End of: Define and check parameters
+
+	fmt.Printf("%s %s\n\n", variables.AppName, variables.AppVersion)
+
+	// Create new session
+	ctx := context.TODO()
+	cfg := awsUtils.CreateAwsSession(ctx, *awsProfile, *awsRegion)
+
+	if *mode == "backup" {
+		controlBackup(ctx, cfg, *inputFile)
+	} else if *mode == "restore" {
+		controlRestore(ctx, cfg, *bucket, *prefix, *inputFile, *downloadLocation)
 	}
 
 }
