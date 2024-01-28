@@ -8,7 +8,7 @@ import (
 
 // App name and version
 var AppName string = "AWS-S3-BACKUP"
-var AppVersion string = "1.0.3"
+var AppVersion string = "1.1.0"
 
 // AWS AUTHENTICATION
 var AwsAuthCredentialsFrom string = "awsCliProfile" // "files" or "awsCliProfile"
