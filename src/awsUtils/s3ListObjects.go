@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"os"
 
@@ -18,17 +19,23 @@ func ListObjects(ctx context.Context, cfg aws.Config, bucket, prefix, jsonOutput
 	clientS3 := s3.NewFromConfig(cfg)
 
 	output, err := clientS3.ListObjectsV2(ctx, &s3.ListObjectsV2Input{Bucket: &bucket, Prefix: &prefix})
+	if err != nil {
+		log.Fatalf("ERROR! Failed to list objects! Is the bucket name correct? (%v)\n", err)
+	}
 	objectCounter := 0
 	for _, content := range output.Contents {
-		objectCounter++
 		item := variables.Content{
 			Key:          *content.Key,
 			Size:         *content.Size,
 			StorageClass: string(content.StorageClass),
 			LastModified: *content.LastModified,
 		}
-		fmt.Println(*content.Key)
-		objects = append(objects, item)
+
+		if *content.Size != 0 { // Exclude folders
+			objectCounter++
+			fmt.Println(*content.Key)
+			objects = append(objects, item)
+		}
 	}
 	contents := variables.Contents{
 		Contents: objects,
@@ -38,6 +45,6 @@ func ListObjects(ctx context.Context, cfg aws.Config, bucket, prefix, jsonOutput
 
 	fmt.Println()
 	fmt.Printf("Number of objects returned: %d\n", objectCounter)
-	fmt.Fprintf(os.Stdout, "More objects available than returned: %t\n", *output.IsTruncated)
+	fmt.Fprintf(os.Stdout, "More objects available than returned: %t\n\n", *output.IsTruncated)
 	return err
 }

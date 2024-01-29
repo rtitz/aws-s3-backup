@@ -382,7 +382,7 @@ func listBuckets(ctx context.Context, cfg aws.Config) error {
 	return nil
 }
 
-func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, downloadLocation string) ([]variables.InputData, error) {
+func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, downloadLocation, retrievalMode string) ([]variables.InputData, error) {
 	var input []variables.InputData
 	jsonFile, err := os.Open(inputJson)
 	if err != nil {
@@ -397,7 +397,10 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 	for i := 0; i < len(contents.Contents); i++ {
 		var restoreStatus string = variables.RestoreNotNeededMessage
 		if slices.Contains(variables.StorageClassesNeedRestore, contents.Contents[i].StorageClass) {
-			objectInfo, _ := awsUtils.HeadObject(ctx, cfg, bucket, contents.Contents[i].Key)
+			objectInfo, err := awsUtils.HeadObject(ctx, cfg, bucket, contents.Contents[i].Key)
+			if err != nil {
+				log.Fatalf("ERROR! Failed to get object info! / Check authentication! (%v)\n", err)
+			}
 			restoreStatus = variables.RestoreNotInitiatedMessage
 			if objectInfo.Restore != nil { // Restore initiated
 				restoreStatus = *objectInfo.Restore
@@ -414,7 +417,7 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 		if restoreStatus == "Not initiated" {
 			c := askForConfirmation(" Request restore of this object?", true, true)
 			if c {
-				if err := awsUtils.RestoreObject(ctx, cfg, bucket, contents.Contents[i].Key); err != nil {
+				if err := awsUtils.RestoreObject(ctx, cfg, bucket, contents.Contents[i].Key, retrievalMode); err != nil {
 					fmt.Println("Failed to restore object: ", err.Error())
 				} else {
 					fmt.Println("Restore requested!")
@@ -438,7 +441,7 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 	return input, nil
 }
 
-func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFile, downloadLocation string) error {
+func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFile, downloadLocation, retrievalMode string) error {
 	fmt.Println("MODE: RESTORE")
 
 	if bucket == "" {
@@ -460,7 +463,14 @@ func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFi
 
 	if inputFile == "" && prefix == "" { // Build an input file is not given, matching the JSON output of commend: aws s3api list-objects-v2 --bucket s3-bucket
 		outputFile := variables.JsonOutputFile
-		awsUtils.ListObjects(ctx, cfg, bucket, prefix, outputFile)
+		if err := awsUtils.ListObjects(ctx, cfg, bucket, prefix, outputFile); err != nil {
+			log.Fatalf("ERROR! Failed to list objects! (%v)\n", err)
+		}
+		fmt.Printf("Generated: '%s'\n\n", outputFile)
+		c := askForConfirmation("Do you want to continue with restore, without editing generated input JSON?", true, false)
+		if !c {
+			return nil
+		}
 		inputFile = outputFile
 	}
 
@@ -475,13 +485,24 @@ func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFi
 		if inputFile == "" {
 			outputFile = variables.JsonOutputFile
 		}
-		awsUtils.ListObjects(ctx, cfg, bucket, prefix, outputFile)
+		if err := awsUtils.ListObjects(ctx, cfg, bucket, prefix, outputFile); err != nil {
+			log.Fatalf("ERROR! Failed to list objects! (%v)\n", err)
+		}
+		fmt.Printf("Generated: '%s'\n\n", outputFile)
+		c := askForConfirmation("Do you want to continue with restore, without editing generated input JSON?", true, false)
+		if !c {
+			return nil
+		}
 		inputFile = outputFile
 	}
 
-	restoreObjects(ctx, cfg, bucket, inputFile, downloadLocation)
-	//os.Remove(jsonOutputFile)
-	fmt.Println("Done! ")
+	if _, err := os.Stat(inputFile); err == nil { // If inputFile exists
+		restoreObjects(ctx, cfg, bucket, inputFile, downloadLocation, retrievalMode)
+		fmt.Println("Done! ")
+	} else {
+		fmt.Printf("ERROR! Input file '%s' does not exist!\n", inputFile)
+		os.Exit(3)
+	}
 
 	return nil
 }
@@ -521,11 +542,14 @@ func main() {
 	bucket := flag.String("bucket", "", "If mode is 'restore' you have to specify the bucket, in which your data is stored. Without this parameter you will get a list of Buckets printed.")
 	prefix := flag.String("prefix", "", "Specify a prefix to limit object list to objects in a specific 'folder' in the S3 bucket. (Example: 'archive')")
 	inputFile := flag.String("json", "", "JSON file that contains the input parameters")
-	downloadLocation := flag.String("destination", "", "Path / directory the restore should be downloaded to (Example: 'restore/')")
+	downloadLocation := flag.String("destination", "", "Path / directory the restore should be downloaded to. Download location. (Example: 'restore/')")
+	retrievalMode := flag.String("retrievalMode", variables.DefaultRetrievalMode, "Mode of retrieval (bulk or standard)")
 	//combineDownloadedParts := flag.Bool("combineDownloadedParts", false, "Automatically combine downloaded splittet file parts to one single file after download")
 	awsProfile := flag.String("profile", variables.AwsCliProfileDefault, "Specify the AWS CLI profile, for example: 'default'")
 	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'default'")
 	flag.Parse()
+	*retrievalMode = strings.ToLower(*retrievalMode)
+	*mode = strings.ToLower(*mode)
 
 	if (*mode == "backup" && *inputFile == "") || (*mode != "backup" && *mode != "restore") {
 		fmt.Printf("Parameter missing / wrong! Try again and specify the following parameters.\n\nParameter list:\n\n")
@@ -544,7 +568,7 @@ func main() {
 	if *mode == "backup" {
 		controlBackup(ctx, cfg, *inputFile)
 	} else if *mode == "restore" {
-		controlRestore(ctx, cfg, *bucket, *prefix, *inputFile, *downloadLocation)
+		controlRestore(ctx, cfg, *bucket, *prefix, *inputFile, *downloadLocation, *retrievalMode)
 	}
 
 }

@@ -20,27 +20,45 @@ This [link](https://calculator.aws/) can help you calculating the chages
     "Version": "2012-10-17",
     "Statement": [
         {
+            "Effect": "Allow",
             "Action": [
-                "s3:DeleteObject*",
-                "s3:PutObject*"
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion",
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:RestoreObject",
+                "s3:ListBucket",
+                "s3:ListBucketVersions",
+                "s3:ListAllMyBuckets"
             ],
             "Resource": [
-                "arn:aws:s3:::NAME-OF-YOUR-S3-BUCKET/*"
+              "arn:aws:s3:::NAME-OF-YOUR-S3-BUCKET",
+              "arn:aws:s3:::NAME-OF-YOUR-S3-BUCKET/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListAllMyBuckets"
             ],
-            "Effect": "Allow"
+            "Resource": [
+              "*"
+            ]
         }
     ]
 }
 ```
 
 
-## Usage
+## Usage in general
   * See 'example-input.json' and build your own input.json
   * See the help
 ```
 aws-s3-backup_macos-arm64 -help
 ```
 
+## Backup your data
   * Execute with **your** input.json
 ```
 aws-s3-backup_macos-arm64 -json ~/tmp/input.json
@@ -51,6 +69,21 @@ aws-s3-backup_macos-arm64 -json ~/tmp/input.json
 aws-s3-backup_macos-arm64 -json ~/tmp/input.json -profile test -region eu-central-1
 ```
 **NOTE:** Default AWS CLI profile is: 'default' and default AWS region is 'us-east-1'.
+
+## Restore your backup
+  * List your buckets
+```
+aws-s3-backup_macos-arm64 -mode restore 
+```
+
+  * Restore everything out of an bucket (and generate an input json for restore called 'generated-restore-input.json' in your current directory)
+```
+aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination Downloads/restore/
+``` 
+
+```
+aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json generated-restore-input.json
+```
 
 ## Command line parameters
 

@@ -2,8 +2,6 @@ package variables
 
 import (
 	"time"
-
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // App name and version
@@ -78,11 +76,11 @@ type Content struct {
 
 var JsonOutputFile string = "generated-restore-input.json"
 var DefaultDaysRestoreIsAvailable int = 1
-var DefaultRestoreObjectTier types.Tier = types.TierBulk
+var DefaultRetrievalMode string = "bulk" // Bulk is the cheapest one (https://docs.aws.amazon.com/AmazonS3/latest/userguide/restoring-objects-retrieval-options.html)
 
-var RestoreNotNeededMessage = "Not needed"
+var RestoreNotNeededMessage = "Not needed for this Storage Class"
 var RestoreNotInitiatedMessage = "Not initiated"
-var RestoreOngoingMessage = "ongoing [ Takes up to 48 hours! ]"
+var RestoreOngoingMessage = "ongoing [ Typically done within 48 hours. ]"
 var RestoreDoneMessage = "restored"
 
 var StorageClassesNeedRestore []string
