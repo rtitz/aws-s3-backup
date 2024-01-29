@@ -82,6 +82,7 @@ var RestoreNotNeededMessage = "Not needed for this Storage Class"
 var RestoreNotInitiatedMessage = "Not initiated"
 var RestoreOngoingMessage = "ongoing [ Typically done within 48 hours. ]"
 var RestoreDoneMessage = "restored"
+var RestoreWithoutConfirmationParameter = "restoreWithoutConfirmation"
 
 var StorageClassesNeedRestore []string
 
