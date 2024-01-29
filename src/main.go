@@ -382,7 +382,7 @@ func listBuckets(ctx context.Context, cfg aws.Config) error {
 	return nil
 }
 
-func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, downloadLocation, retrievalMode string) ([]variables.InputData, error) {
+func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, downloadLocation, retrievalMode string, restoreWithoutConfirmation bool) ([]variables.InputData, error) {
 	var input []variables.InputData
 	jsonFile, err := os.Open(inputJson)
 	if err != nil {
@@ -415,7 +415,12 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 
 		fmt.Printf("%s \n * Size: %.2f %s\n * StorageClass: %s\n * RestoreStatus: %s\n", contents.Contents[i].Key, size, unit, contents.Contents[i].StorageClass, restoreStatus)
 		if restoreStatus == "Not initiated" {
-			c := askForConfirmation(" Request restore of this object?", true, true)
+			var c bool
+			if restoreWithoutConfirmation {
+				c = true
+			} else {
+				c = askForConfirmation(" Request restore of this object?", true, true)
+			}
 			if c {
 				if err := awsUtils.RestoreObject(ctx, cfg, bucket, contents.Contents[i].Key, retrievalMode); err != nil {
 					fmt.Println("Failed to restore object: ", err.Error())
@@ -441,8 +446,17 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 	return input, nil
 }
 
-func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFile, downloadLocation, retrievalMode string) error {
+func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFile, downloadLocation, retrievalMode string, restoreWithoutConfirmation bool) error {
 	fmt.Println("MODE: RESTORE")
+
+	if restoreWithoutConfirmation {
+		fmt.Printf("\nATTENTION!\nRestore of objects from Glacier / archive storage classes to standard storage class will be done WITHOUT any confirmation, because you have specified the '%s' parameter!\n\n", variables.RestoreWithoutConfirmationParameter)
+		c := askForConfirmation("Do you want to continue, without confirming restore requests from from Glacier / archive storage classes?", true, false)
+		if !c {
+			fmt.Println("Abort by user!")
+			os.Exit(9)
+		}
+	}
 
 	if bucket == "" {
 		fmt.Println("No bucket specified")
@@ -497,7 +511,7 @@ func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFi
 	}
 
 	if _, err := os.Stat(inputFile); err == nil { // If inputFile exists
-		restoreObjects(ctx, cfg, bucket, inputFile, downloadLocation, retrievalMode)
+		restoreObjects(ctx, cfg, bucket, inputFile, downloadLocation, retrievalMode, restoreWithoutConfirmation)
 		fmt.Println("Done! ")
 	} else {
 		fmt.Printf("ERROR! Input file '%s' does not exist!\n", inputFile)
@@ -544,9 +558,10 @@ func main() {
 	inputFile := flag.String("json", "", "JSON file that contains the input parameters")
 	downloadLocation := flag.String("destination", "", "Path / directory the restore should be downloaded to. Download location. (Example: 'restore/')")
 	retrievalMode := flag.String("retrievalMode", variables.DefaultRetrievalMode, "Mode of retrieval (bulk or standard)")
+	restoreWithoutConfirmation := flag.Bool(variables.RestoreWithoutConfirmationParameter, false, "Restore objects from Glacier / archive storage classes to standard storage class has to be confirmed per object. If this parameter is specified, restores will be done without confirmation!")
 	//combineDownloadedParts := flag.Bool("combineDownloadedParts", false, "Automatically combine downloaded splittet file parts to one single file after download")
 	awsProfile := flag.String("profile", variables.AwsCliProfileDefault, "Specify the AWS CLI profile, for example: 'default'")
-	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'default'")
+	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'us-east-1'")
 	flag.Parse()
 	*retrievalMode = strings.ToLower(*retrievalMode)
 	*mode = strings.ToLower(*mode)
@@ -568,7 +583,7 @@ func main() {
 	if *mode == "backup" {
 		controlBackup(ctx, cfg, *inputFile)
 	} else if *mode == "restore" {
-		controlRestore(ctx, cfg, *bucket, *prefix, *inputFile, *downloadLocation, *retrievalMode)
+		controlRestore(ctx, cfg, *bucket, *prefix, *inputFile, *downloadLocation, *retrievalMode, *restoreWithoutConfirmation)
 	}
 
 }
