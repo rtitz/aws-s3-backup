@@ -30,7 +30,7 @@ func PutObject(ctx context.Context, cfg aws.Config, checksumMode, checksum, file
 	if variables.UploadMethod == "TransferManager" {
 		//uploader := manager.NewUploader(clientS3)
 		uploader := manager.NewUploader(clientS3, func(u *manager.Uploader) {
-			u.PartSize = variables.SplitUploadsEachXMegaBytes * 1024 * 1024 // 64MB per part
+			u.PartSize = variables.SplitUploadsEachXMegaBytes * 1024 * 1024
 		})
 
 		params := s3.PutObjectInput{}

@@ -32,8 +32,9 @@ type Tasks struct {
 }
 
 type Task struct {
-	S3Bucket                  string   `json:"S3Bucket"`
-	S3Prefix                  string   `json:"S3Prefix"`
+	S3Bucket string `json:"S3Bucket"`
+	S3Prefix string `json:"S3Prefix"`
+	//TrimBeginningOfPathInS3   string   `json:"TrimBeginningOfPathInS3"`
 	StorageClass              string   `json:"StorageClass"`
 	ArchiveSplitEachMB        string   `json:"ArchiveSplitEachMB"`
 	TmpStorageToBuildArchives string   `json:"TmpStorageToBuildArchives"`
@@ -46,6 +47,7 @@ type InputData struct {
 	LocalPath                 []string
 	RemotePath                []string
 	S3Prefix                  string
+	TrimBeginningOfPathInS3   string
 	S3Bucket                  string
 	StorageClass              string
 	ArchiveSplitEachMB        string
@@ -75,14 +77,14 @@ type Content struct {
 }
 
 var JsonOutputFile string = "generated-restore-input.json"
-var DefaultDaysRestoreIsAvailable int = 1
-var DefaultRetrievalMode string = "bulk" // Bulk is the cheapest one (https://docs.aws.amazon.com/AmazonS3/latest/userguide/restoring-objects-retrieval-options.html)
+var DefaultDaysRestoreIsAvailable int = 3
+var DefaultRetrievalMode string = "bulk" // bulk is the cheapest one (https://docs.aws.amazon.com/AmazonS3/latest/userguide/restoring-objects-retrieval-options.html)
 
 var RestoreNotNeededMessage = "Not needed for this Storage Class"
 var RestoreNotInitiatedMessage = "Not initiated"
-var RestoreOngoingMessage = "ongoing [ Typically done within 48 hours. ]"
+var RestoreOngoingMessageBulk = "ongoing [ Typically done within 48 hours. (Mode: bulk) ]"
+var RestoreOngoingMessageStandard = "ongoing [ Typically done within 12 hours. (Mode: standard) ]"
 var RestoreDoneMessage = "restored"
-var RestoreWithoutConfirmationParameter = "restoreWithoutConfirmation"
 
 var StorageClassesNeedRestore []string
 

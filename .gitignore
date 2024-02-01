@@ -7,6 +7,7 @@
 #build/*
 #bin/*
 
+src/aws-s3-backup
 src/*credentials
 src/credentials*
 src/credentials
