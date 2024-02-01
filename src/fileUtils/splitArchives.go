@@ -28,6 +28,7 @@ func SplitArchive(archiveFile string, SplitArchiveEachXMegaBytes int64) ([]strin
 		return listOfParts, errFi
 	}
 
+	// return without splitting if file is smaller than SplitArchiveEachXMegaBytes
 	if fileInfo.Size() <= splitSize {
 		listOfParts = append(listOfParts, archiveFile)
 		return listOfParts, nil

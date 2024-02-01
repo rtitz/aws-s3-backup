@@ -23,7 +23,8 @@ import (
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
-func getInput(inputJson string) ([]variables.InputData, error) {
+// Used for backup
+func getInputBackup(inputJson string) ([]variables.InputData, error) {
 	var input []variables.InputData
 	jsonFile, err := os.Open(inputJson)
 	if err != nil {
@@ -45,10 +46,11 @@ func getInput(inputJson string) ([]variables.InputData, error) {
 			}
 
 			newEntry := variables.InputData{
-				Source:                    c,
-				LocalPath:                 []string{},
-				RemotePath:                []string{},
-				S3Prefix:                  tasks.Tasks[i].S3Prefix,
+				Source:     c,
+				LocalPath:  []string{},
+				RemotePath: []string{},
+				S3Prefix:   tasks.Tasks[i].S3Prefix,
+				//TrimBeginningOfPathInS3:   tasks.Tasks[i].TrimBeginningOfPathInS3,
 				S3Bucket:                  tasks.Tasks[i].S3Bucket,
 				StorageClass:              tasks.Tasks[i].StorageClass,
 				ArchiveSplitEachMB:        tasks.Tasks[i].ArchiveSplitEachMB,
@@ -62,6 +64,7 @@ func getInput(inputJson string) ([]variables.InputData, error) {
 	return input, nil
 }
 
+// Used for backup
 func buildArchive(files []string, archiveFile string) (string, error) {
 	archiveFile = archiveFile + "." + variables.ArchiveExtension
 	archiveFile = strings.ReplaceAll(archiveFile, " ", "-") // REPLACE SPACE WITH -
@@ -106,10 +109,10 @@ func buildArchive(files []string, archiveFile string) (string, error) {
 		}
 		log.Println("Existing archive copied successfully")
 	}
-	// END OF: TAR.GZ
 	return archiveFile, nil
 }
 
+// Used for backup
 func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) (string, error) {
 	var parts string
 	var path string
@@ -125,6 +128,8 @@ func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) 
 	if !strings.HasSuffix(archive, "."+variables.ArchiveExtension) {
 		archive = archive + "." + variables.ArchiveExtension
 	}
+
+	// Content is a cat command that makes cat on all files and redirects the output into a single new file
 	contentOfHowToFile := fmt.Sprintf("cat %s > %s && rm -f %s %s\n", parts, archive, parts, archive+variables.HowToBuildFileSuffix)
 
 	// Create HowToFile file
@@ -141,6 +146,7 @@ func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) 
 	return howToFile, nil
 }
 
+// Used for backup
 func checkIfPathAlreadyProcessed(processedTrackingFile, path string, listOfParts []string, write bool) (bool, error) {
 	if write {
 		// Create processed file
@@ -189,8 +195,11 @@ func checkIfPathAlreadyProcessed(processedTrackingFile, path string, listOfParts
 	}
 }
 
+// Control function for backup
 func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error {
-	fmt.Println("MODE: BACKUP")
+	fmt.Printf("\nMODE: BACKUP\n\n")
+
+	// ControlBackup parameter check
 	processedTrackingFile := inputFile + variables.ProcessedTrackingSuffix
 	currentWorkingDirectory, _ := os.Getwd()
 	filesUploaded := false
@@ -203,19 +212,21 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 		checksumMode = "md5"
 	}
 
-	os.Chdir(currentWorkingDirectory)
-	tasks, err := getInput(inputFile)
+	os.Chdir(currentWorkingDirectory) // Ensure that working directory is current dir
+	tasks, err := getInputBackup(inputFile)
 	if err != nil {
 		log.Fatalf("FAILED TO PARSE %s : %v", inputFile, err)
 	}
 	if len(tasks) < 1 {
 		log.Fatalf("NO TASKS FOUND! Please check that the json in your parameters is in correct format!")
 	}
+	// END OF: ControlBackup parameter check
 
-	for _, task := range tasks {
+	for _, task := range tasks { // Loop through tasks defined in input json file
 		path := task.Source
 		s3Bucket := task.S3Bucket
 		s3Prefix := filepath.Clean(task.S3Prefix)
+		//trimBeginningOfPathInS3 := task.TrimBeginningOfPathInS3
 		archiveSplitEachMB, _ := strconv.Atoi(task.ArchiveSplitEachMB)
 		tmpStorageToBuildArchives := task.TmpStorageToBuildArchives
 		cleanupTmpStorage := task.CleanupTmpStorage
@@ -262,17 +273,27 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 			storageClass = types.StorageClassStandard
 		}
 
-		archiveTmp := filepath.Clean(tmpStorageToBuildArchives)
+		archiveTmp := filepath.Clean(tmpStorageToBuildArchives) // This is the temp location to build the archives (directory)
 		os.MkdirAll(archiveTmp, os.ModePerm)
 
-		c := []string{path} // This is the content for the backup
+		c := []string{path} // This is the content for the backup (c is the "Content" section of the input json file)
 
-		archivePath := filepath.Clean(filepath.Dir(path)) + "/"
-		archive := filepath.Base(path)
-		//archive = archive + "." + variables.ArchiveExtension
-		//archive = strings.ReplaceAll(archive, " ", "-") // REPLACE SPACE WITH -
-		//fullArchivePath :=
-		fullArchivePath, _ := buildArchive(c, archiveTmp+"/"+archive)
+		archivePath := filepath.Clean(filepath.Dir(path)) + "/"       // This is the path to the archive file
+		archive := filepath.Base(path)                                // This is the archive file name
+		fullArchivePath, _ := buildArchive(c, archiveTmp+"/"+archive) // Create the archive out of the defined content
+
+		// Path in S3 Bucket
+		/*fmt.Println("TRIM: ", trimBeginningOfPathInS3)
+		fmt.Println("ARCHIVEPATH:", archivePath)
+		archivePath = strings.TrimLeft(archivePath, trimBeginningOfPathInS3)
+		if !strings.HasPrefix(archivePath, "/") {
+			archivePath = "/" + archivePath
+		}
+		fmt.Println("ARCHIVEPATH:", archivePath)*/
+		s3PathToFile := s3Prefix + archivePath // This is the full path where the object in the S3 Bucket will be located
+		//fmt.Println("ARCHIVEPATH FULL :", s3PathToFile)
+
+		// Give the archive to the SplitArchive function. If needed (depending on size), it will split the archive.
 		listOfParts, err := fileUtils.SplitArchive(fullArchivePath, int64(archiveSplitEachMB))
 		if err != nil {
 			log.Fatalf("FAILED TO SPLIT: %v", err)
@@ -281,14 +302,14 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 		numberOfParts := len(listOfParts)
 		if numberOfParts > 1 { // Remove original (unsplitted) archive, if it has been splitted
 			os.Remove(fullArchivePath)
-			HowToFile, err := createTxtHowToCombineSplittedArchive(archive, listOfParts)
+			HowToFile, err := createTxtHowToCombineSplittedArchive(archive, listOfParts) // Create HowToCombineSplittedArchive text file and add it to the list of files need to be uploaded
 			if err != nil {
 				log.Fatalf("FAILED TO CREATE HOW-TO-FILE: %v", err)
 			}
 			listOfParts = append(listOfParts, HowToFile)
 		}
 
-		for i, part := range listOfParts {
+		for i, part := range listOfParts { // Iterate through the list of files to be uploaded
 			partNumber := i + 1
 
 			// Get file info
@@ -298,27 +319,30 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 				log.Fatalf("ERROR GETTING FILE INFO: %v\n", err)
 			}
 
-			log.Println("S3 path: s3://" + s3Bucket + "/" + s3Prefix + archivePath + filepath.Base(part))
+			log.Println("S3 path: s3://" + s3Bucket + "/" + s3PathToFile + filepath.Base(part))
 			log.Println("Local path: " + part)
 			log.Printf("Size: %.2f %s\n", size, unit)
 			log.Println("StorageClass: " + storageClass)
 
-			if partNumber > numberOfParts { // HowToFile
+			if partNumber > numberOfParts { // This is the HowToFile, since it is not counted as one of the archive parts
 				log.Printf("Upload (HowToFile) ...")
-			} else if numberOfParts > 1 {
+			} else if numberOfParts > 1 { // Splitted archive file being uploaded
 				log.Printf("Upload (%d/%d) ...", partNumber, numberOfParts)
-			} else {
+			} else { // Only one (unsplitted) archive file being uploaded
 				log.Printf("Upload...")
 			}
-			if err := awsUtils.PutObject(ctx, cfg, checksumMode, checksum, part, s3Bucket, s3Prefix+archivePath+filepath.Base(part), storageClass); err != nil {
+
+			// Start the upload function
+			if err := awsUtils.PutObject(ctx, cfg, checksumMode, checksum, part, s3Bucket, s3PathToFile+filepath.Base(part), storageClass); err != nil {
 				time.Sleep(time.Millisecond * 200)
-				errCleanup := awsUtils.DeleteObj(ctx, cfg, s3Bucket, s3Prefix+archivePath+filepath.Base(part))
+				errCleanup := awsUtils.DeleteObj(ctx, cfg, s3Bucket, s3PathToFile+filepath.Base(part))
 				if errCleanup != nil {
-					log.Printf("FAILED TO CLEANUP BROKEN UPLOAD: s3://%s/%s ERROR: %v", s3Bucket, s3Prefix+archivePath+filepath.Base(part), errCleanup)
+					log.Printf("FAILED TO CLEANUP BROKEN UPLOAD: s3://%s/%s ERROR: %v", s3Bucket, s3PathToFile+filepath.Base(part), errCleanup)
 				}
 				log.Fatalf("UPLOAD FAILED! %v", err)
 			}
 
+			// Calculate how many percentage (of splitted archive) are uploaded
 			var percentage float64 = (float64(partNumber) / float64(numberOfParts)) * float64(100)
 			if percentage == 100 {
 				log.Printf(" %.2f %% (%d/%d) UPLOADED - DONE!\n", percentage, partNumber, numberOfParts)
@@ -330,13 +354,14 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 				log.Printf(" %.2f %% (%d/%d) UPLOADED\n", percentage, partNumber, numberOfParts)
 			}
 
+			// Cleanup the temp storage that has been used to build the archive if CleanupTmpStorage is true
 			if cleanupTmpStorageBool {
 				os.Remove(part)
 			}
 			filesUploaded = true
 		}
 
-		// Write path to file that records the processed paths
+		// Write path to file that records the already processed files / paths
 		os.Chdir(currentWorkingDirectory)
 		checkIfPathAlreadyProcessed(processedTrackingFile, path, listOfParts, true)
 	}
@@ -344,7 +369,7 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 	// Put additional data about backup in S3 Bucket
 	if filesUploaded {
 		additionalUploadOk := true
-		listOfAdditionalFiles := []string{
+		listOfAdditionalFiles := []string{ // Also upload the input json file and the tracking file about processed uploads
 			inputFile,
 			processedTrackingFile,
 		}
@@ -352,8 +377,7 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 		s3Prefix := filepath.Clean(tasks[0].S3Prefix) + "/"
 		log.Println("Upload of additional JSON files...")
 		for _, part := range listOfAdditionalFiles {
-			// Get file info
-			_, _, _, _, checksum, _ := fileUtils.GetFileInfo(part, checksumMode)
+			_, _, _, _, checksum, _ := fileUtils.GetFileInfo(part, checksumMode) // Get file info
 			if err := awsUtils.PutObject(ctx, cfg, checksumMode, checksum, part, s3Bucket, s3Prefix+filepath.Base(part), types.StorageClassStandard); err != nil {
 				time.Sleep(time.Millisecond * 200)
 				awsUtils.DeleteObj(ctx, cfg, s3Bucket, s3Prefix+filepath.Base(part))
@@ -370,6 +394,7 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 
 // =================================================================================================================
 
+// Used for restore
 func listBuckets(ctx context.Context, cfg aws.Config) error {
 	listOfBuckets, err := awsUtils.ListBuckets(ctx, cfg)
 	if err != nil {
@@ -382,11 +407,13 @@ func listBuckets(ctx context.Context, cfg aws.Config) error {
 	return nil
 }
 
-func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, downloadLocation, retrievalMode string, restoreWithoutConfirmation bool) ([]variables.InputData, error) {
+// Used for restore
+func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, downloadLocation, retrievalMode string, restoreWithoutConfirmation bool, autoRetryDownloadMinutes, restoreExpiresAfterDays int64) ([]variables.InputData, bool, error) {
 	var input []variables.InputData
+	var restoresPending bool = false
 	jsonFile, err := os.Open(inputJson)
 	if err != nil {
-		return input, err
+		return input, restoresPending, err
 	}
 	defer jsonFile.Close()
 
@@ -405,7 +432,13 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 			if objectInfo.Restore != nil { // Restore initiated
 				restoreStatus = *objectInfo.Restore
 				if strings.Contains(restoreStatus, "ongoing-request=\"true\"") {
-					restoreStatus = variables.RestoreOngoingMessage + " (Details: " + *objectInfo.Restore + ")"
+					var ongoingMessage string = variables.RestoreOngoingMessageBulk
+					if strings.ToLower(retrievalMode) == "bulk" {
+						ongoingMessage = variables.RestoreOngoingMessageBulk
+					} else if strings.ToLower(retrievalMode) == "standard" {
+						ongoingMessage = variables.RestoreOngoingMessageStandard
+					}
+					restoreStatus = ongoingMessage + " (Details: " + *objectInfo.Restore + ")"
 				} else if strings.Contains(restoreStatus, "ongoing-request=\"false\"") {
 					restoreStatus = variables.RestoreDoneMessage + " (Details: " + *objectInfo.Restore + ")"
 				}
@@ -422,12 +455,17 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 				c = askForConfirmation(" Request restore of this object?", true, true)
 			}
 			if c {
-				if err := awsUtils.RestoreObject(ctx, cfg, bucket, contents.Contents[i].Key, retrievalMode); err != nil {
+				if err := awsUtils.RestoreObject(ctx, cfg, bucket, contents.Contents[i].Key, retrievalMode, restoreExpiresAfterDays); err != nil {
 					fmt.Println("Failed to restore object: ", err.Error())
 				} else {
 					fmt.Println("Restore requested!")
+					restoresPending = true
 				}
 			}
+		}
+
+		if strings.Contains(restoreStatus, "ongoing-request=\"true\"") {
+			restoresPending = true
 		}
 
 		if strings.Contains(restoreStatus, "ongoing-request=\"false\"") || (restoreStatus == variables.RestoreNotNeededMessage) {
@@ -443,39 +481,42 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 		}
 		fmt.Printf("\n")
 	}
-	return input, nil
+	return input, restoresPending, nil
 }
 
-func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFile, downloadLocation, retrievalMode string, restoreWithoutConfirmation bool) error {
-	fmt.Println("MODE: RESTORE")
+// Control function for restore
+func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFile, downloadLocation, retrievalMode string, restoreWithoutConfirmation bool, autoRetryDownloadMinutes, restoreExpiresAfterDays int64) error {
+	fmt.Printf("\nMODE: RESTORE\n\n")
 
+	// ControlRestore parameter check
 	if restoreWithoutConfirmation {
-		fmt.Printf("\nATTENTION!\nRestore of objects from Glacier / archive storage classes to standard storage class will be done WITHOUT any confirmation, because you have specified the '%s' parameter!\n\n", variables.RestoreWithoutConfirmationParameter)
+		fmt.Printf("\nATTENTION!\nRestore of objects from Glacier / archive storage classes to standard storage class will be done WITHOUT any confirmation, because you have specified the 'restoreWithoutConfirmation' parameter!\n\n")
 		c := askForConfirmation("Do you want to continue, without confirming restore requests from from Glacier / archive storage classes?", true, false)
 		if !c {
 			fmt.Println("Abort by user!")
 			os.Exit(9)
 		}
+		fmt.Println()
 	}
 
 	if bucket == "" {
 		fmt.Println("No bucket specified")
 		fmt.Println("Here is the list of buckets you can specify with parameter -bucket")
 		fmt.Println()
-		err := listBuckets(ctx, cfg)
+		err := listBuckets(ctx, cfg) // Print a list of all existing buckets if no bucket is specified
 		fmt.Println()
 		return err
 	}
 
 	if downloadLocation == "" {
-		fmt.Println("Download location not specified")
+		fmt.Println("Download location not specified (-destination)")
 		fmt.Printf("Parameter missing / wrong! Try again and specify the following parameters.\n\nParameter list:\n\n")
 		flag.PrintDefaults()
 		fmt.Printf("\n")
-		os.Exit(999)
+		os.Exit(8)
 	}
 
-	if inputFile == "" && prefix == "" { // Build an input file is not given, matching the JSON output of commend: aws s3api list-objects-v2 --bucket s3-bucket
+	if inputFile == "" && prefix == "" { // Build an input file if not given, matching the JSON output of commend: aws s3api list-objects-v2 --bucket s3-bucket
 		outputFile := variables.JsonOutputFile
 		if err := awsUtils.ListObjects(ctx, cfg, bucket, prefix, outputFile); err != nil {
 			log.Fatalf("ERROR! Failed to list objects! (%v)\n", err)
@@ -499,28 +540,46 @@ func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFi
 		if inputFile == "" {
 			outputFile = variables.JsonOutputFile
 		}
-		if err := awsUtils.ListObjects(ctx, cfg, bucket, prefix, outputFile); err != nil {
+		if err := awsUtils.ListObjects(ctx, cfg, bucket, prefix, outputFile); err != nil { // Build an input file if not given, matching the JSON output of commend: aws s3api list-objects-v2 --bucket s3-bucket
 			log.Fatalf("ERROR! Failed to list objects! (%v)\n", err)
 		}
 		fmt.Printf("Generated: '%s'\n\n", outputFile)
 		c := askForConfirmation("Do you want to continue with restore, without editing generated input JSON?", true, false)
 		if !c {
-			return nil
+			return nil // If answer is 'false' return. Allow the user to adjust the generated restore json file.
 		}
 		inputFile = outputFile
 	}
+	// END OF: ControlRestore parameter check
 
-	if _, err := os.Stat(inputFile); err == nil { // If inputFile exists
-		restoreObjects(ctx, cfg, bucket, inputFile, downloadLocation, retrievalMode, restoreWithoutConfirmation)
-		fmt.Println("Done! ")
-	} else {
+	if _, err := os.Stat(inputFile); err != nil { // If inputFile does not exists
 		fmt.Printf("ERROR! Input file '%s' does not exist!\n", inputFile)
 		os.Exit(3)
+	} else { // Restore objects as described in input json file
+		for {
+			_, pendingRestore, err := restoreObjects(ctx, cfg, bucket, inputFile, downloadLocation, retrievalMode, restoreWithoutConfirmation, autoRetryDownloadMinutes, restoreExpiresAfterDays)
+			if err != nil {
+				fmt.Printf("ERROR: Restore failed! (%v)\n", err)
+			}
+
+			if pendingRestore && autoRetryDownloadMinutes <= 0 { // End (break) the for loop if there are pending restores and 'auto retry download' is off
+				fmt.Println("Not everything is downloaded yet. Restores are ongoing.\n'DEEP_ARCHIVE' restores can take up to 48 hours.\nJust execute this command again in a few hours, it will only download new (not already downloaded) objects.")
+				break
+			} else if !pendingRestore { // End (break) the for loop if there are no pending restores
+				log.Println("Done! ")
+				break
+			}
+
+			// There are pending restores and 'auto retry download' is enabled. Sleep for the configured duration, before retrying the download
+			log.Printf("Restores are ongoing. 'DEEP_ARCHIVE' restores can take up to 48 hours. Retry download in %d minutes ... (You can cancel with CTRL + C and execute this command again)\n\n", autoRetryDownloadMinutes)
+			time.Sleep(time.Minute * time.Duration(autoRetryDownloadMinutes))
+		}
 	}
 
 	return nil
 }
 
+// General function to ask for user confirmations
 func askForConfirmation(s string, handleDefault, defaultValue bool) bool {
 	reader := bufio.NewReader(os.Stdin)
 	answers := "[y/n]"
@@ -550,16 +609,17 @@ func askForConfirmation(s string, handleDefault, defaultValue bool) bool {
 
 // START
 func main() {
-
 	// Define and check parameters
 	mode := flag.String("mode", "backup", "Operation mode (backup or restore)")
 	bucket := flag.String("bucket", "", "If mode is 'restore' you have to specify the bucket, in which your data is stored. Without this parameter you will get a list of Buckets printed.")
 	prefix := flag.String("prefix", "", "Specify a prefix to limit object list to objects in a specific 'folder' in the S3 bucket. (Example: 'archive')")
 	inputFile := flag.String("json", "", "JSON file that contains the input parameters")
 	downloadLocation := flag.String("destination", "", "Path / directory the restore should be downloaded to. Download location. (Example: 'restore/')")
-	retrievalMode := flag.String("retrievalMode", variables.DefaultRetrievalMode, "Mode of retrieval (bulk or standard)")
-	restoreWithoutConfirmation := flag.Bool(variables.RestoreWithoutConfirmationParameter, false, "Restore objects from Glacier / archive storage classes to standard storage class has to be confirmed per object. If this parameter is specified, restores will be done without confirmation!")
-	//combineDownloadedParts := flag.Bool("combineDownloadedParts", false, "Automatically combine downloaded splittet file parts to one single file after download")
+	retrievalMode := flag.String("retrievalMode", variables.DefaultRetrievalMode, "Mode of retrieval (bulk or standard) for objects stored Glacier / archive storage classes. (bulk takes up to 48 hours / standard takes up to 12 hours, but is more expensive than bulk)")
+	restoreWithoutConfirmation := flag.Bool("restoreWithoutConfirmation", false, "Restore objects from Glacier / archive storage classes to standard storage class has to be confirmed per object. If this parameter is specified, restores will be done without confirmation!")
+	autoRetryDownloadMinutes := flag.Int64("autoRetryDownloadMinutes", 0, "If a restore from Glacier / archive storage classes to standard storage class is needed and this is for example 60 it will retry the download every 60 minutes. If this parameter is specified, restores will be done without confirmation!")
+	restoreExpiresAfterDays := flag.Int64("restoreExpiresAfterDays", int64(variables.DefaultDaysRestoreIsAvailable), "Days that a restore from DeepArchive storage classes is available in (more expensive) Standard storage class")
+	//combineDownloadedParts := flag.Bool("combineDownloadedParts", false, "Automatically combine downloaded splittet file parts to one single file after download, if this parameter is specified.")
 	awsProfile := flag.String("profile", variables.AwsCliProfileDefault, "Specify the AWS CLI profile, for example: 'default'")
 	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'us-east-1'")
 	flag.Parse()
@@ -570,7 +630,20 @@ func main() {
 		fmt.Printf("Parameter missing / wrong! Try again and specify the following parameters.\n\nParameter list:\n\n")
 		flag.PrintDefaults()
 		fmt.Printf("\n")
-		os.Exit(999)
+		os.Exit(11)
+	}
+
+	if *autoRetryDownloadMinutes > 0 {
+		*restoreWithoutConfirmation = true
+		if *autoRetryDownloadMinutes < 60 {
+			fmt.Printf("Parameter -autoRetryDownloadMinutes must be 60 or higher.\n")
+			os.Exit(14)
+		}
+	}
+
+	if *restoreExpiresAfterDays < 1 {
+		fmt.Printf("Parameter -restoreExpiresAfterDays must be 1 or higher.\n")
+		os.Exit(15)
 	}
 	// End of: Define and check parameters
 
@@ -578,12 +651,16 @@ func main() {
 
 	// Create new session
 	ctx := context.TODO()
-	cfg := awsUtils.CreateAwsSession(ctx, *awsProfile, *awsRegion)
+	cfg, err := awsUtils.CreateAwsSession(ctx, *awsProfile, *awsRegion)
+	if err != nil {
+		log.Fatalf("FAILED TO AUTHENTICATE! (%v)", err)
+	}
 
+	// Depending on the mode start controlBackup or controlRestore
 	if *mode == "backup" {
 		controlBackup(ctx, cfg, *inputFile)
 	} else if *mode == "restore" {
-		controlRestore(ctx, cfg, *bucket, *prefix, *inputFile, *downloadLocation, *retrievalMode, *restoreWithoutConfirmation)
+		controlRestore(ctx, cfg, *bucket, *prefix, *inputFile, *downloadLocation, *retrievalMode, *restoreWithoutConfirmation, *autoRetryDownloadMinutes, *restoreExpiresAfterDays)
 	}
 
 }

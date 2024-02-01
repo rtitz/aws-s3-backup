@@ -5,15 +5,16 @@ Then it will split these archives into smaller chunks, if they are large (config
 It will upload the archives to the S3 bucket speciefied in input.json file and store it in the StorageClass choosen by you.\
 Checksums are caclulated and verifed to ensure the integrity of uploaded data to S3.\
 
+  * See: [Example of a backup](doc/example-backup.md)
+  * See: [Example of a restore](doc/example-restore.md)
+
 **There are charges from AWS for the S3 usage!**
 This [link](https://calculator.aws/) can help you calculating the chages
 
 
 ## Requirements for AWS S3 Backup
- * Ensure that the AWS CLI is installed and configured! (https://docs.aws.amazon.com/cli/)
- * AWS CLI configuration (https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)
  * An existing S3 Bucket within your AWS account
- * An IAM user with access key (and secret access key)
+ * An IAM user with access key (and secret access key) OR configured AWS CLI profile OR programmatic access credentials from AWS IAM Identity Center
  * Your IAM user should have the following permissions (can be a separate attached IAM policy):
 ```
 {
@@ -29,8 +30,7 @@ This [link](https://calculator.aws/) can help you calculating the chages
                 "s3:GetObjectVersion",
                 "s3:RestoreObject",
                 "s3:ListBucket",
-                "s3:ListBucketVersions",
-                "s3:ListAllMyBuckets"
+                "s3:ListBucketVersions"
             ],
             "Resource": [
               "arn:aws:s3:::NAME-OF-YOUR-S3-BUCKET",
@@ -52,8 +52,12 @@ This [link](https://calculator.aws/) can help you calculating the chages
 
 
 ## Usage in general
+  * In the directory 'bin/' you will find pre-compiled executable binaries for different operating systems. You can just execute them in a terminal.
   * See 'example-input.json' and build your own input.json
+  * See: [Example of a backup](doc/example-backup.md)
+  * See: [Example of a restore](doc/example-restore.md)
   * See the help
+
 ```
 aws-s3-backup_macos-arm64 -help
 ```
@@ -90,16 +94,54 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json genera
 ### json
  * Specify the path to input.json (see below)
 
-### profile
+### profile (if AWS CLI is installed)
   * Specify the name of the AWS CLI profile
+  * Default profiles beeing used: default
+  * If AWS CLI is not installed, you can use environment variables for authentication
+  * You can list your profiles with: 'aws configure list-profiles' command
   * See: [AWS Documentation about AWS CLI Configuration](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)
 
 ### region
   * The AWS region must match the region in which your destination S3 bucket lives
+  * Default is us-east-1
   * See [AWS Documentation about S3 Buckets](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingBucket.html)
 
+### mode
+  * Operation mode (backup or restore)
+  * Default is backup
 
-## input.json
+### bucket (only used for restore)
+  * If mode is 'restore' you have to specify the bucket, in which your data is stored.
+  * Without this parameter you will get a list of Buckets printed.
+
+### prefix (only used for restore)
+  * Specify a prefix to limit object list to objects in a specific 'folder' in the S3 bucket.
+  * Example: 'archive'
+
+### destination (only used for restore)
+  * Path / directory the restore should be downloaded to. Download location.
+  * Example: 'restore/'
+
+### retrievalMode (only used for restore)
+  * Mode of retrieval (bulk or standard)
+  * Used for objects stored Glacier / archive storage classes.
+  * bulk takes up to 48 hours / standard takes up to 12 hours, but is more expensive than bulk
+  * Default is bulk
+
+### restoreExpiresAfterDays (only used for restore)
+  * Days that a restore from DeepArchive storage classes is available in (more expensive) Standard storage class
+  * Default is 3 (days)
+
+### autoRetryDownloadMinutes (only used for restore)
+  * If a restore from Glacier / archive storage classes to standard storage class is needed and this is for example 60 it will retry the download every 60 minutes.
+  * If this parameter is specified, restores will be done without confirmation! (See: restoreWithoutConfirmation)
+
+### restoreWithoutConfirmation (only used for restore)
+  * Restore objects from Glacier / archive storage classes to standard storage class has to be confirmed per object. If this parameter is specified, restores will be done without confirmation!
+  * By default this parameter is not specified
+
+
+## The 'input.json' file for backups
 
 ### StorageClasses
 
@@ -109,7 +151,7 @@ The following values for 'StorageClass' in JSON input file are supported:
   * DEEP_ARCHIVE
   * GLACIER_IR
   * GLACIER
-  * REDUCED_REDUNDANCY (**NOT** recommended! Do not use it!)
+  * REDUCED_REDUNDANCY (**NOT recommended!** Do not use it!)
 
 **For the different StorageClasses different pricing and different minimum storage duration applies!\
 Depending on the StorageClass you choose, there is maybe a retrieval charge for your data etc.\
@@ -131,6 +173,29 @@ For more info about the different StorageClasses and AWS S3 pricing in general s
  * If you set this to False, it will keep all data in TmpStorageToBuildArchives path after uploading to S3. (see above)
  * You could for example verify you can successfully extract the archives or rebuild them if splitted
  * Technically there is no need to disable the CleanupTmpStorage since this data is stored in your S3 bucket
+
+
+## Authentication via environment variables (instead of AWS CLI)
+  * Do not specify the parameter -profile
+  * If you sign in via the AWS IAM Identity Center, you will find the button 'Command line or programmatic access', you can copy the AWS environment variable commands from here and execute aws-s3-backup tool afterwards.
+  * Before executing aws-s3-backup tool, set environment variables as follows (If not copied from AWS IAM Identity Center sign in page):
+
+Linux ans macOS:
+```
+export AWS_ACCESS_KEY_ID="AKXXXXXXXXX"
+export AWS_SECRET_ACCESS_KEY="XXXXXXXXXXXXXXXXX"
+./aws-s3-backup
+```
+
+Windows PowerShell:
+```
+$Env:AWS_ACCESS_KEY_ID="AKXXXXXXXXX"
+$Env:AWS_SECRET_ACCESS_KEY="XXXXXXXXXXXXXXXXX"
+aws-s3-backup.exe
+```
+
+  * HINT: You can create an IAM User in the AWS IAM Console and an Access Key for this user to get AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+  * NEVER SHARE THESE KEYS WITH OTHERS!
 
 ---
 ## [Build it on your own from source](doc/build.md)

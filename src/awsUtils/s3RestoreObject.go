@@ -7,12 +7,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/rtitz/aws-s3-backup/variables"
 )
 
-func RestoreObject(ctx context.Context, cfg aws.Config, bucket, object, retrievalMode string) error {
+func RestoreObject(ctx context.Context, cfg aws.Config, bucket, object, retrievalMode string, restoreExpiresAfterDays int64) error {
 
-	defaultDaysRestoreIsAvailable := variables.DefaultDaysRestoreIsAvailable
 	clientS3 := s3.NewFromConfig(cfg)
 
 	var retrievalModeTier types.Tier = types.TierBulk
@@ -23,7 +21,7 @@ func RestoreObject(ctx context.Context, cfg aws.Config, bucket, object, retrieva
 	}
 
 	_, err := clientS3.RestoreObject(ctx, &s3.RestoreObjectInput{Bucket: &bucket, Key: &object, RestoreRequest: &types.RestoreRequest{
-		Days:                 aws.Int32(int32(defaultDaysRestoreIsAvailable)),
+		Days:                 aws.Int32(int32(restoreExpiresAfterDays)),
 		GlacierJobParameters: &types.GlacierJobParameters{Tier: retrievalModeTier},
 	}})
 
