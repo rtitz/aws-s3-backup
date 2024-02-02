@@ -1,5 +1,5 @@
 # AWS S3 Backup
-This is a tool create in Go to backup data to AWS S3.\
+This is a tool created in Go to backup data to [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/).\
 It will create tar.gz archives out of the paths you input in input.json (see 'example-input.json')\
 Then it will split these archives into smaller chunks, if they are large (configurable, see 'example-input.json')\
 It will upload the archives to the S3 bucket speciefied in input.json file and store it in the StorageClass choosen by you.\
@@ -13,6 +13,9 @@ This [link](https://calculator.aws/) can help you calculating the chages
 
 
 ## Requirements for AWS S3 Backup
+ * There are CloudFormation templates in directory "cloudformation", that can be used to deploy the requirements
+
+Here are the requirements in detail, in case you do not want to use the provided CloudFormation templates:
  * An existing S3 Bucket within your AWS account
  * An IAM user with access key (and secret access key) OR configured AWS CLI profile OR programmatic access credentials from AWS IAM Identity Center
  * Your IAM user should have the following permissions (can be a separate attached IAM policy):
@@ -194,8 +197,8 @@ $Env:AWS_SECRET_ACCESS_KEY="XXXXXXXXXXXXXXXXX"
 aws-s3-backup.exe
 ```
 
-  * HINT: You can create an IAM User in the AWS IAM Console and an Access Key for this user to get AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
-  * NEVER SHARE THESE KEYS WITH OTHERS!
+  * HINT: You can create an IAM User in the AWS IAM Console and an Access Key for this user to get AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY. (There is also a CloudFormation template to create the user.)
+  * **NEVER SHARE THESE KEYS WITH OTHERS!**
 
 ---
 ## [Build it on your own from source](doc/build.md)

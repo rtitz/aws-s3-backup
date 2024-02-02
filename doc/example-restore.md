@@ -2,6 +2,15 @@
 
 **[Back](../README.md)**
 
+**IMPORTANT: THERE IS NOTHING SPECIAL ABOUT THE WAY HOW THIS TOOL STORES DATA IN S3!**\
+You can always restore without this tool. Even via the S3 web console a restore via a browser is possible. (It is just less manual work to use this tool, if there are many files.)\
+  * See [S3 UserGuide](https://docs.aws.amazon.com/AmazonS3/latest/userguide/)
+  * See [S3 UserGuide - Download Objects](https://docs.aws.amazon.com/AmazonS3/latest/userguide/download-objects.html)
+  * See [S3 UserGuide - Restoring an archived object](https://docs.aws.amazon.com/AmazonS3/latest/userguide/restoring-objects.html)
+
+---
+The following example describes the restore, if you want to use this tool also for a restore.
+
   * In this example you are in the directoy: /Users/rtitz/
   * The following files are in this directory:
 ```text
