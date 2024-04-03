@@ -6,7 +6,7 @@ import (
 
 // App name and version
 var AppName string = "AWS-S3-BACKUP"
-var AppVersion string = "1.1.0"
+var AppVersion string = "1.2.0"
 
 // AWS AUTHENTICATION
 var AwsAuthCredentialsFrom string = "awsCliProfile" // "files" or "awsCliProfile"
@@ -32,9 +32,9 @@ type Tasks struct {
 }
 
 type Task struct {
-	S3Bucket string `json:"S3Bucket"`
-	S3Prefix string `json:"S3Prefix"`
-	//TrimBeginningOfPathInS3   string   `json:"TrimBeginningOfPathInS3"`
+	S3Bucket                  string   `json:"S3Bucket"`
+	S3Prefix                  string   `json:"S3Prefix"`
+	TrimBeginningOfPathInS3   string   `json:"TrimBeginningOfPathInS3"`
 	StorageClass              string   `json:"StorageClass"`
 	ArchiveSplitEachMB        string   `json:"ArchiveSplitEachMB"`
 	TmpStorageToBuildArchives string   `json:"TmpStorageToBuildArchives"`

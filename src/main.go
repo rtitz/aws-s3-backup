@@ -46,11 +46,11 @@ func getInputBackup(inputJson string) ([]variables.InputData, error) {
 			}
 
 			newEntry := variables.InputData{
-				Source:     c,
-				LocalPath:  []string{},
-				RemotePath: []string{},
-				S3Prefix:   tasks.Tasks[i].S3Prefix,
-				//TrimBeginningOfPathInS3:   tasks.Tasks[i].TrimBeginningOfPathInS3,
+				Source:                    c,
+				LocalPath:                 []string{},
+				RemotePath:                []string{},
+				S3Prefix:                  tasks.Tasks[i].S3Prefix,
+				TrimBeginningOfPathInS3:   tasks.Tasks[i].TrimBeginningOfPathInS3,
 				S3Bucket:                  tasks.Tasks[i].S3Bucket,
 				StorageClass:              tasks.Tasks[i].StorageClass,
 				ArchiveSplitEachMB:        tasks.Tasks[i].ArchiveSplitEachMB,
@@ -226,7 +226,7 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 		path := task.Source
 		s3Bucket := task.S3Bucket
 		s3Prefix := filepath.Clean(task.S3Prefix)
-		//trimBeginningOfPathInS3 := task.TrimBeginningOfPathInS3
+		trimBeginningOfPathInS3 := task.TrimBeginningOfPathInS3
 		archiveSplitEachMB, _ := strconv.Atoi(task.ArchiveSplitEachMB)
 		tmpStorageToBuildArchives := task.TmpStorageToBuildArchives
 		cleanupTmpStorage := task.CleanupTmpStorage
@@ -283,15 +283,11 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 		fullArchivePath, _ := buildArchive(c, archiveTmp+"/"+archive) // Create the archive out of the defined content
 
 		// Path in S3 Bucket
-		/*fmt.Println("TRIM: ", trimBeginningOfPathInS3)
-		fmt.Println("ARCHIVEPATH:", archivePath)
-		archivePath = strings.TrimLeft(archivePath, trimBeginningOfPathInS3)
-		if !strings.HasPrefix(archivePath, "/") {
-			archivePath = "/" + archivePath
+		trimmedS3Path := strings.TrimPrefix(archivePath, trimBeginningOfPathInS3)
+		if !strings.HasPrefix(trimmedS3Path, "/") {
+			trimmedS3Path = "/" + trimmedS3Path
 		}
-		fmt.Println("ARCHIVEPATH:", archivePath)*/
-		s3PathToFile := s3Prefix + archivePath // This is the full path where the object in the S3 Bucket will be located
-		//fmt.Println("ARCHIVEPATH FULL :", s3PathToFile)
+		s3PathToFile := s3Prefix + trimmedS3Path // This is the full path where the object in the S3 Bucket will be located
 
 		// Give the archive to the SplitArchive function. If needed (depending on size), it will split the archive.
 		listOfParts, err := fileUtils.SplitArchive(fullArchivePath, int64(archiveSplitEachMB))
@@ -408,7 +404,7 @@ func listBuckets(ctx context.Context, cfg aws.Config) error {
 }
 
 // Used for restore
-func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, downloadLocation, retrievalMode string, restoreWithoutConfirmation bool, autoRetryDownloadMinutes, restoreExpiresAfterDays int64) ([]variables.InputData, bool, error) {
+func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, downloadLocation, retrievalMode string, restoreWithoutConfirmation bool, restoreExpiresAfterDays int64) ([]variables.InputData, bool, error) {
 	var input []variables.InputData
 	var restoresPending bool = false
 	jsonFile, err := os.Open(inputJson)
@@ -473,10 +469,12 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 			downloaded, err := awsUtils.GetObject(ctx, cfg, bucket, contents.Contents[i].Key, downloadLocation)
 			if err != nil {
 				fmt.Println("Download failed! ", err.Error())
-			} else if err == nil && downloaded {
-				fmt.Println("Download: OK")
-			} else if err == nil && !downloaded {
-				fmt.Println("Download: SKIPPED (Already downloaded!)")
+			} else {
+				if downloaded {
+					fmt.Println("Download: OK")
+				} else if !downloaded {
+					fmt.Println("Download: SKIPPED (Already downloaded!)")
+				}
 			}
 		}
 		fmt.Printf("\n")
@@ -557,12 +555,12 @@ func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFi
 		os.Exit(3)
 	} else { // Restore objects as described in input json file
 		for {
-			_, pendingRestore, err := restoreObjects(ctx, cfg, bucket, inputFile, downloadLocation, retrievalMode, restoreWithoutConfirmation, autoRetryDownloadMinutes, restoreExpiresAfterDays)
+			_, pendingRestore, err := restoreObjects(ctx, cfg, bucket, inputFile, downloadLocation, retrievalMode, restoreWithoutConfirmation, restoreExpiresAfterDays)
 			if err != nil {
 				fmt.Printf("ERROR: Restore failed! (%v)\n", err)
 			}
 
-			if pendingRestore && autoRetryDownloadMinutes <= 0 { // End (break) the for loop if there are pending restores and 'auto retry download' is off
+			if pendingRestore && autoRetryDownloadMinutes <= 0 { // End (break) the for loop, if there are pending restores and 'auto retry download' is off
 				fmt.Println("Not everything is downloaded yet. Restores are ongoing.\n'DEEP_ARCHIVE' restores can take up to 48 hours.\nJust execute this command again in a few hours, it will only download new (not already downloaded) objects.")
 				break
 			} else if !pendingRestore { // End (break) the for loop if there are no pending restores
@@ -611,14 +609,14 @@ func askForConfirmation(s string, handleDefault, defaultValue bool) bool {
 func main() {
 	// Define and check parameters
 	mode := flag.String("mode", "backup", "Operation mode (backup or restore)")
-	bucket := flag.String("bucket", "", "If mode is 'restore' you have to specify the bucket, in which your data is stored. Without this parameter you will get a list of Buckets printed.")
-	prefix := flag.String("prefix", "", "Specify a prefix to limit object list to objects in a specific 'folder' in the S3 bucket. (Example: 'archive')")
+	bucket := flag.String("bucket", "", "Only used for mode 'restore'! You have to specify the bucket, in which your data is stored. Without this parameter you will get a list of Buckets printed.")
+	prefix := flag.String("prefix", "", "Only used for mode 'restore'! You can specify a prefix to limit object list to objects in a specific 'folder' in the S3 bucket. (Example: 'archive')")
 	inputFile := flag.String("json", "", "JSON file that contains the input parameters")
-	downloadLocation := flag.String("destination", "", "Path / directory the restore should be downloaded to. Download location. (Example: 'restore/')")
-	retrievalMode := flag.String("retrievalMode", variables.DefaultRetrievalMode, "Mode of retrieval (bulk or standard) for objects stored Glacier / archive storage classes. (bulk takes up to 48 hours / standard takes up to 12 hours, but is more expensive than bulk)")
-	restoreWithoutConfirmation := flag.Bool("restoreWithoutConfirmation", false, "Restore objects from Glacier / archive storage classes to standard storage class has to be confirmed per object. If this parameter is specified, restores will be done without confirmation!")
-	autoRetryDownloadMinutes := flag.Int64("autoRetryDownloadMinutes", 0, "If a restore from Glacier / archive storage classes to standard storage class is needed and this is for example 60 it will retry the download every 60 minutes. If this parameter is specified, restores will be done without confirmation!")
-	restoreExpiresAfterDays := flag.Int64("restoreExpiresAfterDays", int64(variables.DefaultDaysRestoreIsAvailable), "Days that a restore from DeepArchive storage classes is available in (more expensive) Standard storage class")
+	downloadLocation := flag.String("destination", "", "Only used for mode 'restore'! Path / directory the restore should be downloaded to. Download location. (Example: 'restore/')")
+	retrievalMode := flag.String("retrievalMode", variables.DefaultRetrievalMode, "Only used for mode 'restore'! Mode of retrieval (bulk or standard) for objects stored Glacier / archive storage classes. (bulk takes up to 48 hours / standard takes up to 12 hours, but is more expensive than bulk)")
+	restoreWithoutConfirmation := flag.Bool("restoreWithoutConfirmation", false, "Only used for mode 'restore'! Restore objects from Glacier / archive storage classes to standard storage class has to be confirmed per object. If this parameter is specified, restores will be done without confirmation!")
+	autoRetryDownloadMinutes := flag.Int64("autoRetryDownloadMinutes", 0, "Only used for mode 'restore'! If a restore from Glacier / archive storage classes to standard storage class is needed and this is for example 60 it will retry the download every 60 minutes. If this parameter is specified, restores will be done without confirmation!")
+	restoreExpiresAfterDays := flag.Int64("restoreExpiresAfterDays", int64(variables.DefaultDaysRestoreIsAvailable), "Only used for mode 'restore'! Days that a restore from DeepArchive storage classes is available in (more expensive) Standard storage class")
 	//combineDownloadedParts := flag.Bool("combineDownloadedParts", false, "Automatically combine downloaded splittet file parts to one single file after download, if this parameter is specified.")
 	awsProfile := flag.String("profile", variables.AwsCliProfileDefault, "Specify the AWS CLI profile, for example: 'default'")
 	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'us-east-1'")
@@ -630,6 +628,7 @@ func main() {
 		fmt.Printf("Parameter missing / wrong! Try again and specify the following parameters.\n\nParameter list:\n\n")
 		flag.PrintDefaults()
 		fmt.Printf("\n")
+		fmt.Printf("\nFor help visit: https://github.com/rtitz/aws-s3-backup\n\n")
 		os.Exit(11)
 	}
 
