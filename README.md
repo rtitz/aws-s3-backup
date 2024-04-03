@@ -177,6 +177,10 @@ For more info about the different StorageClasses and AWS S3 pricing in general s
  * You could for example verify you can successfully extract the archives or rebuild them if splitted
  * Technically there is no need to disable the CleanupTmpStorage since this data is stored in your S3 bucket
 
+### TrimBeginningOfPathInS3 variable
+  * Default value (also if unset!) is: "" (empty)
+  * If your content path is for example: "/home/rtitz/tmp/pico/" and TrimBeginningOfPathInS3 is for example: "/home/rtitz/" then "/home/rtitz/" will be removed (trimmed) from the S3 path. (Result in S3 will be: s3://my-s3-backup-bucket/backup/tmp/pico.tar.gz)
+
 
 ## Authentication via environment variables (instead of AWS CLI)
   * Do not specify the parameter -profile

@@ -37,14 +37,23 @@ func CreateArchive(files []string, buf io.Writer) (bool, error) {
 		os.Chdir(filepath.Dir(file))
 		//fmt.Println("PWD:", filepath.Dir(file))
 		//fmt.Println("BASE:", filepath.Base(file))
+
+		// This was needed before Go 1.22
 		err := addToArchive(tw, filepath.Base(file))
 		if err != nil {
 			return false, err
 		}
+
+		// Since Go 1.22 the following is possible, but will not output the singe files added to archive.
+		//tw.AddFS(os.DirFS(file))
+
 	}
 	return true, nil
 }
 
+// addToArchive will check if path to be added is a directory or a file.
+// A file will be added (through calling addFileToArchive)
+// A directory will be walked through and the files inside will be added (through calling addFileToArchive)
 func addToArchive(tw *tar.Writer, path string) error {
 
 	// Open the file which will be written into the archive

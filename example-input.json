@@ -3,6 +3,7 @@
         {
             "S3Bucket": "my-s3-backup-bucket",
             "S3Prefix": "backup",
+            "TrimBeginningOfPathInS3": "",
             "StorageClass": "STANDARD",
             "ArchiveSplitEachMB": "250",
             "TmpStorageToBuildArchives": "/mnt/external/tmp",
