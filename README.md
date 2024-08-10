@@ -187,7 +187,7 @@ For more info about the different StorageClasses and AWS S3 pricing in general s
   * If you sign in via the AWS IAM Identity Center, you will find the button 'Command line or programmatic access', you can copy the AWS environment variable commands from here and execute aws-s3-backup tool afterwards.
   * Before executing aws-s3-backup tool, set environment variables as follows (If not copied from AWS IAM Identity Center sign in page):
 
-Linux ans macOS:
+Linux and macOS:
 ```
 export AWS_ACCESS_KEY_ID="AKXXXXXXXXX"
 export AWS_SECRET_ACCESS_KEY="XXXXXXXXXXXXXXXXX"
