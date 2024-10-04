@@ -8,6 +8,7 @@
             "ArchiveSplitEachMB": "250",
             "TmpStorageToBuildArchives": "/mnt/external/tmp",
             "CleanupTmpStorage": "true",
+            "EncryptionSecret": "",
             "Content": [
                 "/home/rtitz/git/aws-s3-backup/src/main.go",
                 "/home/rtitz/tmp/go-rpi-gpio",
