@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// Delete Object from S3 bucket
 func DeleteObj(ctx context.Context, cfg aws.Config, bucket, object string) error {
 
 	log.Printf("Delete: s3://%s/%s ... \n", bucket, object)

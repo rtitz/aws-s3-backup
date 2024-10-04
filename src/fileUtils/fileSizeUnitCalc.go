@@ -5,6 +5,7 @@ import (
 	"strconv"
 )
 
+// Calculates the file size units of a float64 number
 func FileSizeUnitCalculation(sizeInByte float64) (float64, float64, string) {
 	//sizeRaw := float64(stat.Size())
 	sizeRaw := sizeInByte

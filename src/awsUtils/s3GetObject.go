@@ -13,6 +13,7 @@ import (
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
+// Get Object from S3 bucket and download it to given location
 func GetObject(ctx context.Context, cfg aws.Config, bucket, object, downloadLocation string) (bool, string, bool, error) {
 
 	encrypted := false

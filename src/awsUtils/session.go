@@ -11,14 +11,15 @@ import (
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
+// Test through an API call if the AWS session is fine
 func testAwsSession(ctx context.Context, cfg aws.Config) error {
 	clientS3 := s3.NewFromConfig(cfg)
 	_, err := clientS3.ListBuckets(ctx, &s3.ListBucketsInput{})
 	return err
 }
 
+// Creates a new AWS session
 func CreateAwsSession(ctx context.Context, awsProfile, awsRegion string) (aws.Config, error) {
-
 	var cfg aws.Config
 	var err error
 	var sessionOk = false

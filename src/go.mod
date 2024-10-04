@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.40
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.27
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.64.1
-	golang.org/x/crypto v0.27.0
+	golang.org/x/crypto v0.28.0
 )
 
 require (

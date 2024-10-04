@@ -1,4 +1,4 @@
-package fileUtils
+package cryptUtils
 
 import (
 	"errors"
@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rtitz/aws-s3-backup/cryptUtils"
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
@@ -38,10 +37,8 @@ func DecryptFiles(numberOfParts int) error {
 	return nil
 }
 
+// Encrypt file with a secret (password) and stores a new encrypted file
 func CryptFile(encrypt bool, inputFile string, encryptionMethod string, encryptionSecret string) (string, error) {
-
-	// TODO: Upload decryption binaries in an archive
-
 	encryptionMethod = "default"
 	_ = encryptionMethod
 	encryptionSecretByte := []byte(encryptionSecret)
@@ -82,9 +79,9 @@ func CryptFile(encrypt bool, inputFile string, encryptionMethod string, encrypti
 	var bytes []byte
 	data, err := os.ReadFile(inputFile)
 	if encrypt {
-		bytes, _ = cryptUtils.Aes256Encrypt(encryptionSecretByte, data)
+		bytes, _ = Aes256Encrypt(encryptionSecretByte, data)
 	} else {
-		bytes, _ = cryptUtils.Aes256Decrypt(encryptionSecretByte, data)
+		bytes, _ = Aes256Decrypt(encryptionSecretByte, data)
 		if len(bytes) == 0 {
 			fmt.Println("Decrypt bytes:", len(bytes))
 			os.Remove(outputFile)

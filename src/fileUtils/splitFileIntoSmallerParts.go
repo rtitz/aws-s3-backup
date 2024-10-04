@@ -13,15 +13,15 @@ import (
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
-func SplitArchive(archiveFile string, SplitArchiveEachXMegaBytes int64) ([]string, error) {
-
+// Split a given file every X MB into smaller parts
+func SplitFileIntoSmallerParts(file string, SplitFileEachXMegaBytes int64) ([]string, error) {
 	var listOfParts []string
 	var bytes []byte
-	var splitSize int64 = 1024 * 1024 * SplitArchiveEachXMegaBytes
+	var splitSize int64 = 1024 * 1024 * SplitFileEachXMegaBytes
 	var byteCounter int64 = 0
 	var partIndex int64 = 0
 
-	f, err := os.Open(archiveFile)
+	f, err := os.Open(file)
 	if err != nil {
 		panic(err)
 	}
@@ -34,7 +34,7 @@ func SplitArchive(archiveFile string, SplitArchiveEachXMegaBytes int64) ([]strin
 
 	// return without splitting if file is smaller than SplitArchiveEachXMegaBytes
 	if fileInfo.Size() <= splitSize {
-		listOfParts = append(listOfParts, archiveFile)
+		listOfParts = append(listOfParts, file)
 		return listOfParts, nil
 	}
 
@@ -54,7 +54,7 @@ func SplitArchive(archiveFile string, SplitArchiveEachXMegaBytes int64) ([]strin
 		if errors.Is(err, io.EOF) { // END OF FILE
 			if bytes != nil {
 				partIndex++
-				fileName, err := writePartOfFile(partIndex, bytes, archiveFile)
+				fileName, err := writePartOfFile(partIndex, bytes, file)
 				listOfParts = append(listOfParts, fileName)
 				if err != nil {
 					return listOfParts, err
@@ -63,12 +63,12 @@ func SplitArchive(archiveFile string, SplitArchiveEachXMegaBytes int64) ([]strin
 			break
 		}
 
-		// process the one byte b
+		// append the byte b to the bytes slice
 		bytes = append(bytes, b)
 
 		if byteCounter == splitSize {
 			partIndex++
-			fileName, err := writePartOfFile(partIndex, bytes, archiveFile)
+			fileName, err := writePartOfFile(partIndex, bytes, file)
 			listOfParts = append(listOfParts, fileName)
 			bytes = nil
 
@@ -108,14 +108,15 @@ func SplitArchive(archiveFile string, SplitArchiveEachXMegaBytes int64) ([]strin
 	return listOfParts, nil
 }
 
-func writePartOfFile(partIndex int64, bytes []byte, archiveFile string) (string, error) {
+// Write the given data into a new file (part of the large file).
+func writePartOfFile(partIndex int64, bytes []byte, file string) (string, error) {
 	partIndexString := fmt.Sprintf("%05d", partIndex)
-	fileName := archiveFile + "-part" + partIndexString
+	partFileName := file + "-part" + partIndexString
 	//fmt.Printf("\nCONTENT: %s\n%v\n", fileName, bytes)
-	log.Printf("Creating part %d of %s as %s ...", partIndex, archiveFile, fileName)
+	log.Printf("Creating part %d of %s as %s ...", partIndex, file, partFileName)
 
 	// Create output file
-	out, err := os.Create(fileName)
+	out, err := os.Create(partFileName)
 	if err != nil {
 		log.Fatalln("Error writing archive:", err)
 	}
@@ -127,10 +128,11 @@ func writePartOfFile(partIndex int64, bytes []byte, archiveFile string) (string,
 		panic(err)
 	}
 	//log.Printf("wrote %d bytes to %s\n", n, fileName)
-	return fileName, nil
+	return partFileName, nil
 }
 
-func CreateTxtHowToCombineSplittedArchive(archive string, listOfParts []string) (string, error) {
+// Creates an HowTo text file that contains a cat command to combine all the splitted parts a file back to a single file on a unix-like system.
+func CreateTxtHowToCombineSplittedFile(file string, listOfParts []string) (string, error) {
 	var parts string
 	var path string
 	for i, part := range listOfParts {
@@ -143,15 +145,15 @@ func CreateTxtHowToCombineSplittedArchive(archive string, listOfParts []string) 
 		}
 	}
 
-	if !strings.HasSuffix(archive, "."+variables.ArchiveExtension) {
-		archive = archive + "." + variables.ArchiveExtension
+	if !strings.HasSuffix(file, "."+variables.ArchiveExtension) {
+		file = file + "." + variables.ArchiveExtension
 	}
 
 	// Content is a cat command that makes cat on all files and redirects the output into a single new file
-	contentOfHowToFile := fmt.Sprintf("cat %s > %s && rm -f %s %s\n", parts, archive, parts, archive+variables.HowToBuildFileSuffix)
+	contentOfHowToFile := fmt.Sprintf("cat %s > %s && rm -f %s %s\n", parts, file, parts, file+variables.HowToBuildFileSuffix)
 
 	// Create HowToFile file
-	howToFile := path + "/" + archive + variables.HowToBuildFileSuffix
+	howToFile := path + "/" + file + variables.HowToBuildFileSuffix
 	out, err := os.Create(howToFile)
 	if err != nil {
 		log.Fatalln("Error writing how-to-file:", err)

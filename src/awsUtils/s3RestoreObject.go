@@ -9,8 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
+// Restores an object from S3 storage class (e.g. from DEEP-ARCHIVE)
 func RestoreObject(ctx context.Context, cfg aws.Config, bucket, object, retrievalMode string, restoreExpiresAfterDays int64) error {
-
 	clientS3 := s3.NewFromConfig(cfg)
 
 	var retrievalModeTier types.Tier = types.TierBulk
