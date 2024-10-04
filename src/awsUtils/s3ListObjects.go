@@ -13,8 +13,8 @@ import (
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
+// List objects inside a S3 bucket and write them to an JSON output file
 func ListObjects(ctx context.Context, cfg aws.Config, bucket, prefix, jsonOutputFile string) error {
-	//var listOfObjects []string
 	var objects []variables.Content
 	clientS3 := s3.NewFromConfig(cfg)
 

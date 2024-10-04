@@ -14,6 +14,7 @@ import (
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
+// Handles the creation of an archive file and adds the files of the given file list to that archive
 func BuildArchive(files []string, archiveFile string) (string, error) {
 	archiveFile = archiveFile + "." + variables.ArchiveExtension
 	archiveFile = strings.ReplaceAll(archiveFile, " ", "-") // REPLACE SPACE WITH -
@@ -61,6 +62,7 @@ func BuildArchive(files []string, archiveFile string) (string, error) {
 	return archiveFile, nil
 }
 
+// Creates an archive file
 func createArchive(files []string, buf io.Writer) (bool, error) {
 	// Create new Writers for gzip and tar
 	// These writers are chained. Writing to the tar writer will
@@ -92,15 +94,17 @@ func createArchive(files []string, buf io.Writer) (bool, error) {
 		}
 
 		// Since Go 1.22 the following is possible, but will not output the singe files added to archive.
-		//tw.AddFS(os.DirFS(file))
+		// tw.AddFS(os.DirFS(file))
 
 	}
 	return true, nil
 }
 
-// addToArchive will check if path to be added is a directory or a file.
-// A file will be added (through calling addFileToArchive)
-// A directory will be walked through and the files inside will be added (through calling addFileToArchive)
+/*
+addToArchive will check if path to be added is a directory or a file.
+A file will be added (through calling addFileToArchive)
+A directory will be walked through and the files inside will be added (through calling addFileToArchive)
+*/
 func addToArchive(tw *tar.Writer, path string) error {
 
 	// Open the file which will be written into the archive
@@ -147,6 +151,7 @@ func addToArchive(tw *tar.Writer, path string) error {
 	return nil
 }
 
+// Adds given files to the archive
 func addFileToArchive(tw *tar.Writer, file *os.File, fileInfo fs.FileInfo, filename string) error {
 	log.Printf("Add %s to archive...\n", filename)
 	// Create a tar Header from the FileInfo data

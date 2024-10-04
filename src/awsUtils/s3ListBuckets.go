@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// List all available S3 buckets
 func ListBuckets(ctx context.Context, cfg aws.Config) ([]string, error) {
 	var listOfBuckets []string
 	clientS3 := s3.NewFromConfig(cfg)

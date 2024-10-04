@@ -8,8 +8,9 @@ import (
 	"golang.org/x/crypto/scrypt"
 )
 
-// https://bruinsslot.jp/post/golang-crypto/
+// SOURCE: https://bruinsslot.jp/post/golang-crypto/
 
+// Aes256Encrypt encrypts data using AES-256-GCM.
 func Aes256Encrypt(key, data []byte) ([]byte, error) {
 	key, salt, err := deriveKey(key, nil)
 	if err != nil {
@@ -38,6 +39,7 @@ func Aes256Encrypt(key, data []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
+// Aes256Decrypt decrypts data from AES-256-GCM encryption.
 func Aes256Decrypt(key, data []byte) ([]byte, error) {
 	salt, data := data[len(data)-32:], data[:len(data)-32]
 
@@ -66,17 +68,11 @@ func Aes256Decrypt(key, data []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-/*
-func generateKey() ([]byte, error) {
-	key := make([]byte, 32)
-
-	_, err := rand.Read(key)
-	if err != nil {
-		return nil, err
-	}
-	return key, nil
-}*/
-
+// deriveKey derives a key from a password and salt using scrypt.
+// The salt is randomly generated if not provided.
+// The cost parameter is set to 2^20 (1048576) and the block size is set to 8.
+// The key length is set to 32 bytes.
+// The salt is appended to the end of the key for storage purposes.
 func deriveKey(password, salt []byte) ([]byte, []byte, error) {
 	if salt == nil {
 		salt = make([]byte, 32)
@@ -93,3 +89,14 @@ func deriveKey(password, salt []byte) ([]byte, []byte, error) {
 
 	return key, salt, nil
 }
+
+// generateKey generates a random 32-byte key.
+/*func generateKey() ([]byte, error) {
+	key := make([]byte, 32)
+
+	_, err := rand.Read(key)
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
+}*/

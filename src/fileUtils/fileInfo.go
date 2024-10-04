@@ -11,6 +11,7 @@ import (
 	"os"
 )
 
+// Get info / stats and checksums about a file
 func GetFileInfo(file, checksumMode string) (*os.File, float64, float64, string, string, error) {
 
 	f, errF := os.Open(file)

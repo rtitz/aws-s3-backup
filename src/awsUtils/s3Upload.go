@@ -15,8 +15,8 @@ import (
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
+// Put object into S3 bucket
 func PutObject(ctx context.Context, cfg aws.Config, checksumMode, checksum, file, bucket, object string, storageClass types.StorageClass) error {
-
 	// https://aws.github.io/aws-sdk-go-v2/docs/sdk-utilities/s3/
 
 	f, errF := os.Open(file)
