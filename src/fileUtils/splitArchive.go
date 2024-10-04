@@ -7,6 +7,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/rtitz/aws-s3-backup/variables"
 )
 
 func SplitArchive(archiveFile string, SplitArchiveEachXMegaBytes int64) ([]string, error) {
@@ -124,4 +128,38 @@ func writePartOfFile(partIndex int64, bytes []byte, archiveFile string) (string,
 	}
 	//log.Printf("wrote %d bytes to %s\n", n, fileName)
 	return fileName, nil
+}
+
+func CreateTxtHowToCombineSplittedArchive(archive string, listOfParts []string) (string, error) {
+	var parts string
+	var path string
+	for i, part := range listOfParts {
+		path = filepath.Clean(filepath.Dir(part))
+		part = filepath.Base(part)
+		if i == 0 { // First iteration in this loop; do not add a space in the beginning
+			parts = parts + part
+		} else {
+			parts = parts + " " + part
+		}
+	}
+
+	if !strings.HasSuffix(archive, "."+variables.ArchiveExtension) {
+		archive = archive + "." + variables.ArchiveExtension
+	}
+
+	// Content is a cat command that makes cat on all files and redirects the output into a single new file
+	contentOfHowToFile := fmt.Sprintf("cat %s > %s && rm -f %s %s\n", parts, archive, parts, archive+variables.HowToBuildFileSuffix)
+
+	// Create HowToFile file
+	howToFile := path + "/" + archive + variables.HowToBuildFileSuffix
+	out, err := os.Create(howToFile)
+	if err != nil {
+		log.Fatalln("Error writing how-to-file:", err)
+	}
+	defer out.Close()
+	w := bufio.NewWriter(out)
+	w.WriteString(contentOfHowToFile)
+	w.Flush()
+
+	return howToFile, nil
 }

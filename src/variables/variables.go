@@ -6,7 +6,7 @@ import (
 
 // App name and version
 var AppName string = "AWS-S3-BACKUP"
-var AppVersion string = "1.2.0"
+var AppVersion string = "1.2.1"
 
 // AWS AUTHENTICATION
 var AwsAuthCredentialsFrom string = "awsCliProfile" // "files" or "awsCliProfile"
@@ -17,12 +17,14 @@ var AwsCliProfileDefault string = "default"  // Used if AwsAuthCredentialsFrom i
 var AwsCliRegionDefault string = "us-east-1" // Used if AwsAuthCredentialsFrom is "awsCliProfile"
 // END OF: AWS AUTHENTICATION
 
-var UploadMethod string = "PutObject"      // PutObject or TransferManager or Disabled
+var UploadMethod string = "PutObject" // PutObject or TransferManager or Disabled
+// var UploadMethod string = "Disabled"       // DISABLED IS ONLY USED FOR DEBUG AND DEVELOPMENT
 var SplitUploadsEachXMegaBytes int64 = 500 // If TransferManager is used
 var CleanupAfterUploadDefault bool = true
 var HowToBuildFileSuffix string = "-HowToBuild.txt"
 var ProcessedTrackingSuffix string = "-Processed.txt"
 var ArchiveExtension string = "tar.gz"
+var EncryptionExtension string = "enc"
 var ChecksumMode = "sha256" // sha256 or md5 / If md5 then the S3 ETag is used
 
 var OutputSeperator = "============================================================================"
@@ -39,6 +41,7 @@ type Task struct {
 	ArchiveSplitEachMB        string   `json:"ArchiveSplitEachMB"`
 	TmpStorageToBuildArchives string   `json:"TmpStorageToBuildArchives"`
 	CleanupTmpStorage         string   `json:"CleanupTmpStorage"`
+	EncryptionSecret          string   `json:"EncryptionSecret"`
 	Content                   []string `json:"Content"`
 }
 
@@ -53,6 +56,7 @@ type InputData struct {
 	ArchiveSplitEachMB        string
 	TmpStorageToBuildArchives string
 	CleanupTmpStorage         string
+	EncryptionSecret          string
 	Sha256CheckSum            string
 }
 
@@ -87,6 +91,7 @@ var RestoreOngoingMessageStandard = "ongoing [ Typically done within 12 hours. (
 var RestoreDoneMessage = "restored"
 
 var StorageClassesNeedRestore []string
+var FilesNeedingDecryption []string
 
 func init() {
 	StorageClassesNeedRestore = []string{

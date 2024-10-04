@@ -14,7 +14,54 @@ import (
 	"github.com/rtitz/aws-s3-backup/variables"
 )
 
-func CreateArchive(files []string, buf io.Writer) (bool, error) {
+func BuildArchive(files []string, archiveFile string) (string, error) {
+	archiveFile = archiveFile + "." + variables.ArchiveExtension
+	archiveFile = strings.ReplaceAll(archiveFile, " ", "-") // REPLACE SPACE WITH -
+
+	log.Println("Creating archive...")
+	// Create output file
+	out, err := os.Create(archiveFile)
+	if err != nil {
+		log.Fatalln("Error writing archive:", err)
+	}
+	defer out.Close()
+
+	// Create the archive and write the output to the "out" Writer
+	var keepArchiveFile bool
+	keepArchiveFile, err = createArchive(files, out)
+	if err != nil {
+		out.Close()
+		os.Remove(archiveFile)
+		log.Fatalln("Error creating archive:", err)
+	}
+	if keepArchiveFile {
+		log.Println("Archive created successfully")
+	} else { // Archive not created since it is already an archive
+		os.Remove(archiveFile)
+		archiveFile = strings.TrimSuffix(archiveFile, "."+variables.ArchiveExtension)
+
+		file := files[0]
+		source, err := os.Open(file) //open the source file
+		if err != nil {
+			panic(err)
+		}
+		defer source.Close()
+
+		destination, err := os.Create(archiveFile) //create the destination file
+		if err != nil {
+			panic(err)
+		}
+		defer destination.Close()
+		_, err = io.Copy(destination, source) //copy the contents of source to destination file
+		if err != nil {
+			panic(err)
+		}
+		log.Println("Existing archive copied successfully")
+	}
+	return archiveFile, nil
+}
+
+func createArchive(files []string, buf io.Writer) (bool, error) {
 	// Create new Writers for gzip and tar
 	// These writers are chained. Writing to the tar writer will
 	// write to the gzip writer which in turn will write to

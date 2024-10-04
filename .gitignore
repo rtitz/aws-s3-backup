@@ -13,6 +13,7 @@ src/credentials*
 src/credentials
 src/processed.txt
 src/generated-restore-input*
+src/test*.json
 bin/processed.txt
 processed.txt
 

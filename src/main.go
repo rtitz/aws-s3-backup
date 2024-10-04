@@ -56,94 +56,13 @@ func getInputBackup(inputJson string) ([]variables.InputData, error) {
 				ArchiveSplitEachMB:        tasks.Tasks[i].ArchiveSplitEachMB,
 				TmpStorageToBuildArchives: tasks.Tasks[i].TmpStorageToBuildArchives,
 				CleanupTmpStorage:         tasks.Tasks[i].CleanupTmpStorage,
+				EncryptionSecret:          tasks.Tasks[i].EncryptionSecret,
 				Sha256CheckSum:            "0",
 			}
 			input = append(input, newEntry)
 		}
 	}
 	return input, nil
-}
-
-// Used for backup
-func buildArchive(files []string, archiveFile string) (string, error) {
-	archiveFile = archiveFile + "." + variables.ArchiveExtension
-	archiveFile = strings.ReplaceAll(archiveFile, " ", "-") // REPLACE SPACE WITH -
-
-	log.Println("Creating archive...")
-	// Create output file
-	out, err := os.Create(archiveFile)
-	if err != nil {
-		log.Fatalln("Error writing archive:", err)
-	}
-	defer out.Close()
-
-	// Create the archive and write the output to the "out" Writer
-	var keepArchiveFile bool
-	keepArchiveFile, err = fileUtils.CreateArchive(files, out)
-	if err != nil {
-		out.Close()
-		os.Remove(archiveFile)
-		log.Fatalln("Error creating archive:", err)
-	}
-	if keepArchiveFile {
-		log.Println("Archive created successfully")
-	} else { // Archive not created since it is already an archive
-		os.Remove(archiveFile)
-		archiveFile = strings.TrimSuffix(archiveFile, "."+variables.ArchiveExtension)
-
-		file := files[0]
-		source, err := os.Open(file) //open the source file
-		if err != nil {
-			panic(err)
-		}
-		defer source.Close()
-
-		destination, err := os.Create(archiveFile) //create the destination file
-		if err != nil {
-			panic(err)
-		}
-		defer destination.Close()
-		_, err = io.Copy(destination, source) //copy the contents of source to destination file
-		if err != nil {
-			panic(err)
-		}
-		log.Println("Existing archive copied successfully")
-	}
-	return archiveFile, nil
-}
-
-// Used for backup
-func createTxtHowToCombineSplittedArchive(archive string, listOfParts []string) (string, error) {
-	var parts string
-	var path string
-	for i, part := range listOfParts {
-		path = filepath.Clean(filepath.Dir(part))
-		part = filepath.Base(part)
-		if i == 0 { // First iteration in this loop; do not add a space in the beginning
-			parts = parts + part
-		} else {
-			parts = parts + " " + part
-		}
-	}
-	if !strings.HasSuffix(archive, "."+variables.ArchiveExtension) {
-		archive = archive + "." + variables.ArchiveExtension
-	}
-
-	// Content is a cat command that makes cat on all files and redirects the output into a single new file
-	contentOfHowToFile := fmt.Sprintf("cat %s > %s && rm -f %s %s\n", parts, archive, parts, archive+variables.HowToBuildFileSuffix)
-
-	// Create HowToFile file
-	howToFile := path + "/" + archive + variables.HowToBuildFileSuffix
-	out, err := os.Create(howToFile)
-	if err != nil {
-		log.Fatalln("Error writing how-to-file:", err)
-	}
-	defer out.Close()
-	w := bufio.NewWriter(out)
-	w.WriteString(contentOfHowToFile)
-	w.Flush()
-
-	return howToFile, nil
 }
 
 // Used for backup
@@ -203,6 +122,7 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 	processedTrackingFile := inputFile + variables.ProcessedTrackingSuffix
 	currentWorkingDirectory, _ := os.Getwd()
 	filesUploaded := false
+	skipInputFileUpload := false
 
 	// Checksum mode
 	var checksumMode string
@@ -227,6 +147,7 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 		s3Bucket := task.S3Bucket
 		s3Prefix := filepath.Clean(task.S3Prefix)
 		trimBeginningOfPathInS3 := task.TrimBeginningOfPathInS3
+		encryptionSecret := task.EncryptionSecret
 		archiveSplitEachMB, _ := strconv.Atoi(task.ArchiveSplitEachMB)
 		tmpStorageToBuildArchives := task.TmpStorageToBuildArchives
 		cleanupTmpStorage := task.CleanupTmpStorage
@@ -278,16 +199,17 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 
 		c := []string{path} // This is the content for the backup (c is the "Content" section of the input json file)
 
-		archivePath := filepath.Clean(filepath.Dir(path)) + "/"       // This is the path to the archive file
-		archive := filepath.Base(path)                                // This is the archive file name
-		fullArchivePath, _ := buildArchive(c, archiveTmp+"/"+archive) // Create the archive out of the defined content
+		archivePath := filepath.Clean(filepath.Dir(path)) + "/"                 // This is the path to the archive file
+		archive := filepath.Base(path)                                          // This is the archive file name
+		fullArchivePath, _ := fileUtils.BuildArchive(c, archiveTmp+"/"+archive) // Create the archive out of the defined content
 
-		// Path in S3 Bucket
-		trimmedS3Path := strings.TrimPrefix(archivePath, trimBeginningOfPathInS3)
-		if !strings.HasPrefix(trimmedS3Path, "/") {
-			trimmedS3Path = "/" + trimmedS3Path
+		var encryptionEnabled bool = false
+		if encryptionSecret != "" { // Only if EncryptionSecret is set
+			encryptionEnabled = true
+			skipInputFileUpload = true
+			//fullArchivePath, _ = fileUtils.CryptFile(true, fullArchivePath, "default", encryptionSecret)
+			//archive = filepath.Base(fullArchivePath) // This is the archive file name
 		}
-		s3PathToFile := s3Prefix + trimmedS3Path // This is the full path where the object in the S3 Bucket will be located
 
 		// Give the archive to the SplitArchive function. If needed (depending on size), it will split the archive.
 		listOfParts, err := fileUtils.SplitArchive(fullArchivePath, int64(archiveSplitEachMB))
@@ -298,12 +220,45 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 		numberOfParts := len(listOfParts)
 		if numberOfParts > 1 { // Remove original (unsplitted) archive, if it has been splitted
 			os.Remove(fullArchivePath)
-			HowToFile, err := createTxtHowToCombineSplittedArchive(archive, listOfParts) // Create HowToCombineSplittedArchive text file and add it to the list of files need to be uploaded
+			HowToFile, err := fileUtils.CreateTxtHowToCombineSplittedArchive(archive, listOfParts) // Create HowToCombineSplittedArchive text file and add it to the list of files need to be uploaded
 			if err != nil {
 				log.Fatalf("FAILED TO CREATE HOW-TO-FILE: %v", err)
 			}
 			listOfParts = append(listOfParts, HowToFile)
 		}
+
+		// Encryption
+		if encryptionEnabled {
+			//log.Printf("Encryption enabled!")
+			var listOfPartsEncrypted []string
+			for i, part := range listOfParts { // Iterate through the list of files to be uploaded
+				partNumber := i + 1
+
+				if partNumber > numberOfParts { // This is the HowToFile, since it is not counted as one of the archive parts
+					log.Printf("Encrypting (HowToFile) ...")
+				} else if numberOfParts > 1 { // Splitted archive file being uploaded
+					log.Printf("Encrypting (%d/%d) ...", partNumber, numberOfParts)
+				} else { // Only one (unsplitted) archive file being uploaded
+					log.Printf("Encrypting...")
+				}
+				outputFileEnc, errEnc := fileUtils.CryptFile(true, part, "default", encryptionSecret) // True Encrypt ; False Decrypt
+				if errEnc != nil {
+					log.Fatalf("failed to encrypt: %v", errEnc)
+				}
+				os.Remove(part)
+				listOfPartsEncrypted = append(listOfPartsEncrypted, outputFileEnc)
+			}
+			listOfParts = listOfPartsEncrypted
+			// TODO: Remove EncryptionSecret value from input.json and re-enable upload of inputfile (at the moment skipped if encryption enabled)
+		}
+		// END OF: Encryption
+
+		// Path in S3 Bucket
+		trimmedS3Path := strings.TrimPrefix(archivePath, trimBeginningOfPathInS3)
+		if !strings.HasPrefix(trimmedS3Path, "/") {
+			trimmedS3Path = "/" + trimmedS3Path
+		}
+		s3PathToFile := s3Prefix + trimmedS3Path // This is the full path where the object in the S3 Bucket will be located
 
 		for i, part := range listOfParts { // Iterate through the list of files to be uploaded
 			partNumber := i + 1
@@ -365,10 +320,13 @@ func controlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 	// Put additional data about backup in S3 Bucket
 	if filesUploaded {
 		additionalUploadOk := true
-		listOfAdditionalFiles := []string{ // Also upload the input json file and the tracking file about processed uploads
-			inputFile,
-			processedTrackingFile,
+		listOfAdditionalFiles := []string{}
+		// Also upload the input json file and the tracking file about processed uploads
+		if !skipInputFileUpload {
+			listOfAdditionalFiles = append(listOfAdditionalFiles, inputFile)
 		}
+		listOfAdditionalFiles = append(listOfAdditionalFiles, processedTrackingFile)
+
 		s3Bucket := tasks[0].S3Bucket
 		s3Prefix := filepath.Clean(tasks[0].S3Prefix) + "/"
 		log.Println("Upload of additional JSON files...")
@@ -466,7 +424,7 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 
 		if strings.Contains(restoreStatus, "ongoing-request=\"false\"") || (restoreStatus == variables.RestoreNotNeededMessage) {
 			fmt.Println(" Downloading ...")
-			downloaded, err := awsUtils.GetObject(ctx, cfg, bucket, contents.Contents[i].Key, downloadLocation)
+			encrypted, fileName, downloaded, err := awsUtils.GetObject(ctx, cfg, bucket, contents.Contents[i].Key, downloadLocation)
 			if err != nil {
 				fmt.Println("Download failed! ", err.Error())
 			} else {
@@ -474,6 +432,9 @@ func restoreObjects(ctx context.Context, cfg aws.Config, bucket, inputJson, down
 					fmt.Println("Download: OK")
 				} else if !downloaded {
 					fmt.Println("Download: SKIPPED (Already downloaded!)")
+				}
+				if encrypted {
+					variables.FilesNeedingDecryption = append(variables.FilesNeedingDecryption, fileName)
 				}
 			}
 		}
@@ -572,6 +533,20 @@ func controlRestore(ctx context.Context, cfg aws.Config, bucket, prefix, inputFi
 			log.Printf("Restores are ongoing. 'DEEP_ARCHIVE' restores can take up to 48 hours. Retry download in %d minutes ... (You can cancel with CTRL + C and execute this command again)\n\n", autoRetryDownloadMinutes)
 			time.Sleep(time.Minute * time.Duration(autoRetryDownloadMinutes))
 		}
+
+		// If files needing decryption, decrypt them
+		numberOfParts := len(variables.FilesNeedingDecryption)
+		if numberOfParts > 0 {
+			for {
+				err := fileUtils.DecryptFiles(numberOfParts)
+				if err == nil {
+					break
+				} else {
+					fmt.Printf("ERROR: Decryption failed! (%v)\n", err)
+				}
+			}
+			fmt.Println("\nDONE!")
+		}
 	}
 
 	return nil
@@ -605,8 +580,45 @@ func askForConfirmation(s string, handleDefault, defaultValue bool) bool {
 	}
 }
 
+/*func test() {
+	var memStatus runtime.MemStats
+	start_time := time.Now()
+
+	//Piece of code
+	testFile := "/Users/rene/tmp/enc-test/hangouts-takeout-20240703T062159Z-001.tar"
+	//testFile = "/Volumes/ramdisk_1g/tmp/go.mod"
+	//testFile = "/Volumes/ramdisk_1g/tmp/2024-03-12-raspios-bookworm-arm64-lite.img.xz"
+	//testFile = "/Users/rene/tmp/enc-test/SampleTextFile_xMB.txt"
+
+	//fmt.Println("Encrypt: ", testFile)
+	//outputFileEnc, errEnc := fileUtils.CryptFile(true, testFile, "default", "test123") // True Encrypt ; False Decrypt
+	//fmt.Println("Encryption:", outputFileEnc, errEnc)
+	//fmt.Println()
+	fmt.Println("Decrypt: ", testFile+".enc")
+	outputFileDec, errDec := fileUtils.CryptFile(false, testFile+".enc", "default", "test123") // True Encrypt ; False Decrypt
+	fmt.Println("Decryption:", outputFileDec, errDec)
+
+	//fileUtils.CryptFile(true, "/Volumes/ramdisk_1g/tmp/pico2.tar.gz", "default", "test123")
+	//fileUtils.CryptFile(true, "/Volumes/ramdisk_1g/tmp/2024-03-12-raspios-bookworm-arm64-lite.img.xz", "default", "test123") // True Encrypt ; False Decrypt
+	//fileUtils.CryptFile(false, "/Volumes/ramdisk_1g/tmp/2024-03-12-raspios-bookworm-arm64-lite.img.xz", "default", "test123") // True Encrypt ; False Decrypt
+
+	runtime.ReadMemStats(&memStatus)
+	duration := time.Since(start_time)
+
+	info := fmt.Sprintf("Elapsed time = %s. Total memory(MB) consumed = %v", duration, memStatus.Sys/1024/1024)
+	fmt.Println("\n" + info)
+	os.Exit(0)
+}*/
+
 // START
 func main() {
+
+	// TODO
+	/*
+	 - Automaitically combine downloaded files if splitted before upload (unsplitArchive.go detect filename -part and numbers)
+	 - Automatically decrpyt downloaded files if encrypted before upload
+	*/
+
 	// Define and check parameters
 	mode := flag.String("mode", "backup", "Operation mode (backup or restore)")
 	bucket := flag.String("bucket", "", "Only used for mode 'restore'! You have to specify the bucket, in which your data is stored. Without this parameter you will get a list of Buckets printed.")

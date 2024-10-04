@@ -181,6 +181,10 @@ For more info about the different StorageClasses and AWS S3 pricing in general s
   * Default value (also if unset!) is: "" (empty)
   * If your content path is for example: "/home/rtitz/tmp/pico/" and TrimBeginningOfPathInS3 is for example: "/home/rtitz/" then "/home/rtitz/" will be removed (trimmed) from the S3 path. (Result in S3 will be: s3://my-s3-backup-bucket/backup/tmp/pico.tar.gz)
 
+### EncryptionSecret variable
+  * Default value (also if unset!) is: "" (Encryption disabled / Nothing will be encrypted)
+  * If you set a value, this is going to be your secret used to encrypt the archive (or archive parts) before upload. (AES-256-GCM)
+  * During restore you will be asked for the secret to decrypt the file(s)
 
 ## Authentication via environment variables (instead of AWS CLI)
   * Do not specify the parameter -profile
