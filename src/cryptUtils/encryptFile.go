@@ -28,7 +28,7 @@ func DecryptFiles(numberOfParts int) error {
 		} else { // Only one (unsplitted) archive file being uploaded
 			log.Printf("Decrypting...")
 		}
-		_, errEnc := CryptFile(false, part, "default", encryptionSecret) // True Encrypt ; False Decrypt
+		_, errEnc := CryptFile(false, part, variables.EncryptionAlgorithm, encryptionSecret) // True Encrypt ; False Decrypt
 		if errEnc != nil {
 			return errors.New("encryption failed")
 		}
@@ -38,9 +38,8 @@ func DecryptFiles(numberOfParts int) error {
 }
 
 // Encrypt file with a secret (password) and stores a new encrypted file
-func CryptFile(encrypt bool, inputFile string, encryptionMethod string, encryptionSecret string) (string, error) {
-	encryptionMethod = "default"
-	_ = encryptionMethod
+func CryptFile(encrypt bool, inputFile string, EncryptionAlgorithm string, encryptionSecret string) (string, error) {
+
 	encryptionSecretByte := []byte(encryptionSecret)
 	var outputFile string
 	//var splitEncryptionEachXMegaBytes int64 = 256 // Split each X MegaBytes encryption process. Files smaller than this are handled in one piece instead of chunks
@@ -79,9 +78,23 @@ func CryptFile(encrypt bool, inputFile string, encryptionMethod string, encrypti
 	var bytes []byte
 	data, err := os.ReadFile(inputFile)
 	if encrypt {
-		bytes, _ = Aes256Encrypt(encryptionSecretByte, data)
+		switch EncryptionAlgorithm {
+		case "default":
+			bytes, _ = Aes256GcmEncrypt(encryptionSecretByte, data)
+		case "aes-256-gcm":
+			bytes, _ = Aes256GcmEncrypt(encryptionSecretByte, data)
+		default:
+			bytes, _ = Aes256GcmEncrypt(encryptionSecretByte, data)
+		}
 	} else {
-		bytes, _ = Aes256Decrypt(encryptionSecretByte, data)
+		switch EncryptionAlgorithm {
+		case "default":
+			bytes, _ = Aes256GcmEncrypt(encryptionSecretByte, data)
+		case "aes-256-gcm":
+			bytes, _ = Aes256GcmEncrypt(encryptionSecretByte, data)
+		default:
+			bytes, _ = Aes256GcmEncrypt(encryptionSecretByte, data)
+		}
 		if len(bytes) == 0 {
 			fmt.Println("Decrypt bytes:", len(bytes))
 			os.Remove(outputFile)

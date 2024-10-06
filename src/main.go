@@ -36,15 +36,22 @@ func main() {
 	restoreExpiresAfterDays := flag.Int64("restoreExpiresAfterDays", int64(variables.DefaultDaysRestoreIsAvailable), "Only used for mode 'restore'! Days that a restore from DeepArchive storage classes is available in (more expensive) Standard storage class")
 	awsProfile := flag.String("profile", variables.AwsCliProfileDefault, "Specify the AWS CLI profile, for example: 'default'")
 	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'us-east-1'")
+	version := flag.Bool("version", false, "Print the version.")
 	flag.Parse()
 	*retrievalMode = strings.ToLower(*retrievalMode)
 	*mode = strings.ToLower(*mode)
 
+	if *version {
+		fmt.Printf("%s %s\n", variables.AppName, variables.AppVersion)
+		os.Exit(0)
+	}
+
 	if (*mode == "backup" && *inputFile == "") || (*mode != "backup" && *mode != "restore") {
+		fmt.Printf("%s %s\n\n", variables.AppName, variables.AppVersion)
 		fmt.Printf("Parameter missing / wrong! Try again and specify the following parameters.\n\nParameter list:\n\n")
 		flag.PrintDefaults()
 		fmt.Printf("\n")
-		fmt.Printf("\nFor help visit: https://github.com/rtitz/aws-s3-backup\n\n")
+		fmt.Printf("\nFor help visit: " + variables.SrcUrl + "\n\n")
 		os.Exit(11)
 	}
 

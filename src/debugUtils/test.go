@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rtitz/aws-s3-backup/cryptUtils"
+	"github.com/rtitz/aws-s3-backup/variables"
 )
 
 // Playground function for tests
@@ -18,19 +19,18 @@ func Test() {
 	testFile := "/Users/rene/tmp/enc-test/hangouts-takeout-20240703T062159Z-001.tar"
 	//testFile = "/Volumes/ramdisk_1g/tmp/go.mod"
 	//testFile = "/Volumes/ramdisk_1g/tmp/2024-03-12-raspios-bookworm-arm64-lite.img.xz"
-	//testFile = "/Users/rene/tmp/enc-test/SampleTextFile_xMB.txt"
 
 	//fmt.Println("Encrypt: ", testFile)
-	//outputFileEnc, errEnc := fileUtils.CryptFile(true, testFile, "default", "test123") // True Encrypt ; False Decrypt
+	//outputFileEnc, errEnc := fileUtils.CryptFile(true, testFile, variables.EncryptionAlgorithm, "test123") // True Encrypt ; False Decrypt
 	//fmt.Println("Encryption:", outputFileEnc, errEnc)
 	//fmt.Println()
 	fmt.Println("Decrypt: ", testFile+".enc")
-	outputFileDec, errDec := cryptUtils.CryptFile(false, testFile+".enc", "default", "test123") // True Encrypt ; False Decrypt
+	outputFileDec, errDec := cryptUtils.CryptFile(false, testFile+".enc", variables.EncryptionAlgorithm, "test123") // True Encrypt ; False Decrypt
 	fmt.Println("Decryption:", outputFileDec, errDec)
 
-	//fileUtils.CryptFile(true, "/Volumes/ramdisk_1g/tmp/pico2.tar.gz", "default", "test123")
-	//fileUtils.CryptFile(true, "/Volumes/ramdisk_1g/tmp/2024-03-12-raspios-bookworm-arm64-lite.img.xz", "default", "test123") // True Encrypt ; False Decrypt
-	//fileUtils.CryptFile(false, "/Volumes/ramdisk_1g/tmp/2024-03-12-raspios-bookworm-arm64-lite.img.xz", "default", "test123") // True Encrypt ; False Decrypt
+	//fileUtils.CryptFile(true, "/Volumes/ramdisk_1g/tmp/pico2.tar.gz", variables.EncryptionAlgorithm, "test123")
+	//fileUtils.CryptFile(true, "/Volumes/ramdisk_1g/tmp/2024-03-12-raspios-bookworm-arm64-lite.img.xz", variables.EncryptionAlgorithm, "test123") // True Encrypt ; False Decrypt
+	//fileUtils.CryptFile(false, "/Volumes/ramdisk_1g/tmp/2024-03-12-raspios-bookworm-arm64-lite.img.xz", variables.EncryptionAlgorithm, "test123") // True Encrypt ; False Decrypt
 
 	runtime.ReadMemStats(&memStatus)
 	duration := time.Since(start_time)
