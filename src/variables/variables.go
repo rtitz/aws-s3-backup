@@ -6,7 +6,8 @@ import (
 
 // App name and version
 var AppName string = "AWS-S3-BACKUP"
-var AppVersion string = "1.3.0"
+var AppVersion string = "1.3.1"
+var SrcUrl string = "https://github.com/rtitz/aws-s3-backup"
 
 // AWS AUTHENTICATION
 var AwsAuthCredentialsFrom string = "awsCliProfile" // "files" or "awsCliProfile"
@@ -25,7 +26,8 @@ var HowToBuildFileSuffix string = "-HowToBuild.txt"
 var ProcessedTrackingSuffix string = "-Processed.txt"
 var ArchiveExtension string = "tar.gz"
 var EncryptionExtension string = "enc"
-var ChecksumMode = "sha256" // sha256 or md5 / If md5 then the S3 ETag is used
+var EncryptionAlgorithm string = "aes-256-gcm" // aes-256-gcm or default
+var ChecksumMode = "sha256"                    // sha256 or md5 / If md5 then the S3 ETag is used
 
 var OutputSeperator = "============================================================================"
 

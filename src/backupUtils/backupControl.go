@@ -111,7 +111,7 @@ func ControlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 		if encryptionSecret != "" { // Only if EncryptionSecret is set
 			encryptionEnabled = true
 			skipInputFileUpload = true
-			//fullArchivePath, _ = fileUtils.CryptFile(true, fullArchivePath, "default", encryptionSecret)
+			//fullArchivePath, _ = fileUtils.CryptFile(true, fullArchivePath, variables.EncryptionAlgorithm, encryptionSecret)
 			//archive = filepath.Base(fullArchivePath) // This is the archive file name
 		}
 
@@ -145,7 +145,7 @@ func ControlBackup(ctx context.Context, cfg aws.Config, inputFile string) error 
 				} else { // Only one (unsplitted) archive file being uploaded
 					log.Printf("Encrypting...")
 				}
-				outputFileEnc, errEnc := cryptUtils.CryptFile(true, part, "default", encryptionSecret) // True Encrypt ; False Decrypt
+				outputFileEnc, errEnc := cryptUtils.CryptFile(true, part, variables.EncryptionAlgorithm, encryptionSecret) // True Encrypt ; False Decrypt
 				if errEnc != nil {
 					log.Fatalf("failed to encrypt: %v", errEnc)
 				}

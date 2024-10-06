@@ -10,8 +10,8 @@ import (
 
 // SOURCE: https://bruinsslot.jp/post/golang-crypto/
 
-// Aes256Encrypt encrypts data using AES-256-GCM.
-func Aes256Encrypt(key, data []byte) ([]byte, error) {
+// Aes256GcmEncrypt encrypts data using AES-256-GCM.
+func Aes256GcmEncrypt(key, data []byte) ([]byte, error) {
 	key, salt, err := deriveKey(key, nil)
 	if err != nil {
 		return nil, err
@@ -39,8 +39,8 @@ func Aes256Encrypt(key, data []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// Aes256Decrypt decrypts data from AES-256-GCM encryption.
-func Aes256Decrypt(key, data []byte) ([]byte, error) {
+// Aes256GcmDecrypt decrypts data from AES-256-GCM encryption.
+func Aes256GcmDecrypt(key, data []byte) ([]byte, error) {
 	salt, data := data[len(data)-32:], data[:len(data)-32]
 
 	key, _, err := deriveKey(key, salt)
