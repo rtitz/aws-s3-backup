@@ -1,0 +1,273 @@
+package services
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/rtitz/aws-s3-backup/config"
+	"github.com/rtitz/aws-s3-backup/utils"
+)
+
+type BackupService struct {
+	cfg     aws.Config
+	summary *BackupSummary
+}
+
+type BackupSummary struct {
+	SuccessfulUploads int
+	FailedUploads     int
+	Warnings          int
+	TotalFiles        int
+}
+
+func NewBackupService(cfg aws.Config) *BackupService {
+	return &BackupService{
+		cfg:     cfg,
+		summary: &BackupSummary{},
+	}
+}
+
+func (s *BackupService) ProcessBackup(ctx context.Context, inputFile string, dryRun bool) error {
+	fmt.Printf("\nMODE: BACKUP\n\n")
+
+	tasks, err := config.LoadTasks(inputFile)
+	if err != nil {
+		return fmt.Errorf("failed to load tasks: %w", err)
+	}
+
+	for _, task := range tasks {
+		if err := s.processTask(ctx, task, dryRun); err != nil {
+			return fmt.Errorf("❌ failed to process task: %w", err)
+		}
+	}
+
+	if err := s.uploadAdditionalFiles(ctx, tasks, inputFile, dryRun); err != nil {
+		return err
+	}
+
+	s.printSummary(dryRun)
+	return nil
+}
+
+func (s *BackupService) processTask(ctx context.Context, task config.Task, dryRun bool) error {
+	// Validate encryption password if provided
+	if err := utils.ValidateEncryptionPassword(task.EncryptionSecret); err != nil {
+		return err
+	}
+
+	splitMB, err := config.ParseArchiveSplitMB(task.ArchiveSplitEachMB)
+	if err != nil {
+		return err
+	}
+
+	storageClass := config.ParseStorageClass(task.StorageClass)
+	cleanupTmp := config.ParseCleanupFlag(task.CleanupTmpStorage)
+
+	for _, contentPath := range task.Content {
+		if err := s.processContent(ctx, task, contentPath, splitMB, storageClass, cleanupTmp, dryRun); err != nil {
+			s.summary.FailedUploads++
+			return fmt.Errorf("failed to process content %s: %w", contentPath, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *BackupService) processContent(ctx context.Context, task config.Task, contentPath string, splitMB int64, storageClass types.StorageClass, cleanupTmp bool, dryRun bool) error {
+	if err := os.MkdirAll(task.TmpStorageToBuildArchives, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	archiveName := filepath.Base(contentPath)
+	archivePath := filepath.Join(task.TmpStorageToBuildArchives, archiveName)
+
+	fullArchivePath := archivePath + "." + utils.ArchiveExtension
+	if err := utils.CreateArchive([]string{contentPath}, fullArchivePath); err != nil {
+		return fmt.Errorf("failed to build archive: %w", err)
+	}
+
+	parts, err := s.prepareParts(fullArchivePath, splitMB, task.EncryptionSecret)
+	if err != nil {
+		return fmt.Errorf("failed to prepare parts: %w", err)
+	}
+
+	s3Path := s.buildS3Path(task, contentPath)
+
+	if err := s.uploadParts(ctx, parts, task.S3Bucket, s3Path, storageClass, dryRun); err != nil {
+		return fmt.Errorf("failed to upload parts: %w", err)
+	}
+
+	if dryRun {
+		if cleanupTmp {
+			log.Printf("🧽 [DRY-RUN] Skipping cleanup of temporary files - files kept for inspection")
+		}
+	} else if cleanupTmp {
+		s.cleanupFiles(parts)
+	}
+
+	return nil
+}
+
+func (s *BackupService) prepareParts(archivePath string, splitMB int64, encryptionSecret string) ([]string, error) {
+	parts, err := utils.SplitFile(archivePath, splitMB)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(parts) > 1 {
+		os.Remove(archivePath)
+		// Create simple how-to file
+		howToFile := archivePath + "-HowToBuild.txt"
+		err := os.WriteFile(howToFile, []byte("Use 'cat parts > combined' to rebuild"), 0644)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create how-to file: %w", err)
+		}
+		parts = append(parts, howToFile)
+	}
+
+	if encryptionSecret != "" {
+		return s.encryptParts(parts, encryptionSecret)
+	}
+
+	return parts, nil
+}
+
+func (s *BackupService) encryptParts(parts []string, secret string) ([]string, error) {
+	var encryptedParts []string
+	for _, part := range parts {
+		encryptedFile, err := utils.EncryptFile(part, secret)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encrypt %s: %w", part, err)
+		}
+		os.Remove(part)
+		encryptedParts = append(encryptedParts, encryptedFile)
+	}
+	return encryptedParts, nil
+}
+
+func (s *BackupService) buildS3Path(task config.Task, contentPath string) string {
+	archivePath := filepath.Clean(filepath.Dir(contentPath)) + "/"
+	trimmedPath := strings.TrimPrefix(archivePath, task.TrimBeginningOfPathInS3)
+	if !strings.HasPrefix(trimmedPath, "/") {
+		trimmedPath = "/" + trimmedPath
+	}
+	return filepath.Clean(task.S3Prefix) + trimmedPath
+}
+
+func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket, s3Path string, storageClass types.StorageClass, dryRun bool) error {
+	for i, part := range parts {
+		_, err := utils.GetFileChecksum(part)
+		if err != nil {
+			return fmt.Errorf("failed to get checksum: %w", err)
+		}
+		size, err := utils.GetFileSize(part)
+		if err != nil {
+			return fmt.Errorf("failed to get size: %w", err)
+		}
+		sizeFloat := float64(size) / (1024 * 1024) // MB
+		unit := "MB"
+
+		s3Key := s3Path + filepath.Base(part)
+		s.summary.TotalFiles++
+		if dryRun {
+			log.Printf("⬆️ [DRY-RUN] Would upload (%d/%d): %s (%.2f %s) to s3://%s/%s", i+1, len(parts), part, sizeFloat, unit, bucket, s3Key)
+			s.summary.SuccessfulUploads++
+		} else {
+			log.Printf("⬆️ Uploading (%d/%d): %s (%.2f %s)", i+1, len(parts), part, sizeFloat, unit)
+			if err := utils.UploadFile(ctx, s.cfg, part, bucket, s3Key, storageClass); err != nil {
+				s.summary.FailedUploads++
+				return fmt.Errorf("❌ failed to upload %s: %w", part, err)
+			}
+			log.Printf("✅ Upload successful: %s", filepath.Base(part))
+			s.summary.SuccessfulUploads++
+		}
+	}
+	return nil
+}
+
+func (s *BackupService) uploadAdditionalFiles(ctx context.Context, tasks []config.Task, inputFile string, dryRun bool) error {
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	bucket := tasks[0].S3Bucket
+	prefix := filepath.Clean(tasks[0].S3Prefix) + "/"
+
+	files := []string{inputFile}
+
+	for _, file := range files {
+		_, err := utils.GetFileChecksum(file)
+		if err != nil {
+			return fmt.Errorf("failed to get file info for %s: %w", file, err)
+		}
+
+		s3Key := prefix + filepath.Base(file)
+		s.summary.TotalFiles++
+		if dryRun {
+			log.Printf("⬆️ [DRY-RUN] Would upload additional file: %s to s3://%s/%s", file, bucket, s3Key)
+			s.summary.SuccessfulUploads++
+		} else {
+			log.Printf("⬆️ Uploading additional file: %s", filepath.Base(file))
+			if err := utils.UploadFile(ctx, s.cfg, file, bucket, s3Key, types.StorageClassStandard); err != nil {
+				s.summary.FailedUploads++
+				return fmt.Errorf("❌ failed to upload additional file %s: %w", file, err)
+			}
+			log.Printf("✅ Additional file uploaded: %s", filepath.Base(file))
+			s.summary.SuccessfulUploads++
+		}
+	}
+
+	log.Println("Additional files uploaded successfully")
+	return nil
+}
+
+func (s *BackupService) cleanupFiles(files []string) {
+	for _, file := range files {
+		os.Remove(file)
+	}
+}
+
+func (s *BackupService) printSummary(dryRun bool) {
+	fmt.Printf("%s", "\n"+strings.Repeat("=", 50)+"\n")
+	if dryRun {
+		fmt.Printf("📋 BACKUP SUMMARY (DRY-RUN)\n")
+	} else {
+		fmt.Printf("📊 BACKUP SUMMARY\n")
+	}
+	fmt.Printf("%s", strings.Repeat("=", 50)+"\n")
+
+	if s.summary.SuccessfulUploads > 0 {
+		if dryRun {
+			fmt.Printf("✅ Files that would be uploaded: %d\n", s.summary.SuccessfulUploads)
+		} else {
+			fmt.Printf("✅ Successfully uploaded: %d\n", s.summary.SuccessfulUploads)
+		}
+	}
+
+	if s.summary.FailedUploads > 0 {
+		fmt.Printf("❌ Failed uploads: %d\n", s.summary.FailedUploads)
+	}
+
+	if s.summary.Warnings > 0 {
+		fmt.Printf("⚠️  Warnings: %d\n", s.summary.Warnings)
+	}
+
+	fmt.Printf("📁 Total files processed: %d\n", s.summary.TotalFiles)
+
+	if s.summary.FailedUploads == 0 {
+		if dryRun {
+			fmt.Printf("\n🎉 Dry-run completed successfully!\n")
+		} else {
+			fmt.Printf("\n🎉 Backup completed successfully!\n")
+		}
+	} else {
+		fmt.Printf("\n⚠️  Backup completed with errors!\n")
+	}
+	fmt.Printf("%s", strings.Repeat("=", 50)+"\n")
+}

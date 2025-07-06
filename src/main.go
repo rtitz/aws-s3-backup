@@ -5,84 +5,134 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 
-	"github.com/rtitz/aws-s3-backup/awsUtils"
-	"github.com/rtitz/aws-s3-backup/backupUtils"
-	"github.com/rtitz/aws-s3-backup/restoreUtils"
-	"github.com/rtitz/aws-s3-backup/variables"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/rtitz/aws-s3-backup/config"
+	"github.com/rtitz/aws-s3-backup/services"
+	"github.com/rtitz/aws-s3-backup/utils"
+	"github.com/rtitz/aws-s3-backup/version"
 )
 
-// START
 func main() {
-	//debugUtils.Test()
-	//os.Exit(0)
+	if err := run(); err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+}
 
-	// TODO
-	/*
-	 - Automaitically combine downloaded files if splitted before upload (unsplitArchive.go detect filename -part and numbers)
-	*/
+func run() error {
+	flags := parseFlags()
 
-	// Define and check parameters
-	mode := flag.String("mode", "backup", "Operation mode (backup or restore)")
-	bucket := flag.String("bucket", "", "Only used for mode 'restore'! You have to specify the bucket, in which your data is stored. Without this parameter you will get a list of Buckets printed.")
-	prefix := flag.String("prefix", "", "Only used for mode 'restore'! You can specify a prefix to limit object list to objects in a specific 'folder' in the S3 bucket. (Example: 'archive')")
-	inputFile := flag.String("json", "", "JSON file that contains the input parameters")
-	downloadLocation := flag.String("destination", "", "Only used for mode 'restore'! Path / directory the restore should be downloaded to. Download location. (Example: 'restore/')")
-	retrievalMode := flag.String("retrievalMode", variables.DefaultRetrievalMode, "Only used for mode 'restore'! Mode of retrieval (bulk or standard) for objects stored Glacier / archive storage classes. (bulk takes up to 48 hours / standard takes up to 12 hours, but is more expensive than bulk)")
-	restoreWithoutConfirmation := flag.Bool("restoreWithoutConfirmation", false, "Only used for mode 'restore'! Restore objects from Glacier / archive storage classes to standard storage class has to be confirmed per object. If this parameter is specified, restores will be done without confirmation!")
-	autoRetryDownloadMinutes := flag.Int64("autoRetryDownloadMinutes", 0, "Only used for mode 'restore'! If a restore from Glacier / archive storage classes to standard storage class is needed and this is for example 60 it will retry the download every 60 minutes. If this parameter is specified, restores will be done without confirmation!")
-	restoreExpiresAfterDays := flag.Int64("restoreExpiresAfterDays", int64(variables.DefaultDaysRestoreIsAvailable), "Only used for mode 'restore'! Days that a restore from DeepArchive storage classes is available in (more expensive) Standard storage class")
-	awsProfile := flag.String("profile", variables.AwsCliProfileDefault, "Specify the AWS CLI profile, for example: 'default'")
-	awsRegion := flag.String("region", variables.AwsCliRegionDefault, "Specify the AWS CLI profile, for example: 'us-east-1'")
-	version := flag.Bool("version", false, "Print the version.")
-	flag.Parse()
-	*retrievalMode = strings.ToLower(*retrievalMode)
-	*mode = strings.ToLower(*mode)
-
-	if *version {
-		fmt.Printf("%s %s\n", variables.AppName, variables.AppVersion)
-		os.Exit(0)
+	if flags.version {
+		fmt.Printf("%s %s\n", version.AppName, version.AppVersion)
+		return nil
 	}
 
-	if (*mode == "backup" && *inputFile == "") || (*mode != "backup" && *mode != "restore") {
-		fmt.Printf("%s %s\n\n", variables.AppName, variables.AppVersion)
-		fmt.Printf("Parameter missing / wrong! Try again and specify the following parameters.\n\nParameter list:\n\n")
+	cfg := &config.Config{
+		Mode:                       flags.mode,
+		InputFile:                  flags.inputFile,
+		AWSProfile:                 flags.awsProfile,
+		AWSRegion:                  flags.awsRegion,
+		Bucket:                     flags.bucket,
+		Prefix:                     flags.prefix,
+		DownloadLocation:           flags.downloadLocation,
+		RetrievalMode:              flags.retrievalMode,
+		RestoreWithoutConfirmation: flags.restoreWithoutConfirmation,
+		AutoRetryDownloadMinutes:   flags.autoRetryDownloadMinutes,
+		RestoreExpiresAfterDays:    flags.restoreExpiresAfterDays,
+		DryRun:                     flags.dryRun,
+	}
+
+	if err := cfg.Validate(); err != nil {
+		fmt.Printf("%s %s\n\n", version.AppName, version.AppVersion)
+		fmt.Printf("❌ Error: %v\n\nParameter list:\n\n", err)
 		flag.PrintDefaults()
-		fmt.Printf("\n")
-		fmt.Printf("\nFor help visit: " + variables.SrcUrl + "\n\n")
-		os.Exit(11)
+		fmt.Printf("\nFor help visit: https://github.com/rtitz/aws-s3-backup\n\n")
+		return err
 	}
 
-	if *autoRetryDownloadMinutes > 0 {
-		*restoreWithoutConfirmation = true
-		if *autoRetryDownloadMinutes < 60 {
-			fmt.Printf("Parameter -autoRetryDownloadMinutes must be 60 or higher.\n")
-			os.Exit(14)
-		}
+	fmt.Printf("%s %s\n\n", version.AppName, version.AppVersion)
+
+	ctx := context.Background()
+	
+	// Skip AWS authentication for dry-run backup mode
+	if cfg.Mode == "backup" && cfg.DryRun {
+		log.Println("[DRY-RUN] Skipping AWS authentication - no S3 operations will be performed")
+		backupService := services.NewBackupService(aws.Config{})
+		return backupService.ProcessBackup(ctx, cfg.InputFile, cfg.DryRun)
 	}
-
-	if *restoreExpiresAfterDays < 1 {
-		fmt.Printf("Parameter -restoreExpiresAfterDays must be 1 or higher.\n")
-		os.Exit(15)
-	}
-	// End of: Define and check parameters
-
-	fmt.Printf("%s %s\n\n", variables.AppName, variables.AppVersion)
-
-	// Create new session
-	ctx := context.TODO()
-	cfg, err := awsUtils.CreateAwsSession(ctx, *awsProfile, *awsRegion)
+	
+	awsCfg, err := utils.CreateAWSSession(ctx, cfg.AWSProfile, cfg.AWSRegion)
 	if err != nil {
-		log.Fatalf("FAILED TO AUTHENTICATE! (%v)\n\nSee 'Authentication' section of README !\n", err)
+		fmt.Printf("\n❌ AWS Authentication Failed\n\n")
+		fmt.Printf("Error: %v\n\n", err)
+		fmt.Printf("🔧 How to Fix Authentication:\n\n")
+		fmt.Printf("Option 1 - Environment Variables (Recommended):\n")
+		fmt.Printf("  export AWS_ACCESS_KEY_ID=\"YOUR_ACCESS_KEY\"\n")
+		fmt.Printf("  export AWS_SECRET_ACCESS_KEY=\"YOUR_SECRET_KEY\"\n")
+		fmt.Printf("  # Optional: export AWS_SESSION_TOKEN=\"YOUR_TOKEN\" (for temporary credentials)\n\n")
+		fmt.Printf("Option 2 - AWS CLI Profile:\n")
+		fmt.Printf("  aws configure --profile %s\n", cfg.AWSProfile)
+		fmt.Printf("  # Then run: aws-s3-backup -profile %s ...\n\n", cfg.AWSProfile)
+		fmt.Printf("Option 3 - AWS IAM Identity Center:\n")
+		fmt.Printf("  1. Sign in to AWS console\n")
+		fmt.Printf("  2. Click 'Command line or programmatic access'\n")
+		fmt.Printf("  3. Copy and run the export commands\n\n")
+		fmt.Printf("💡 Tips:\n")
+		fmt.Printf("  • Test with dry-run first: --dry-run (no AWS credentials needed)\n")
+		fmt.Printf("  • Check region matches your S3 bucket: -region %s\n", cfg.AWSRegion)
+		fmt.Printf("  • Verify IAM permissions for S3 operations\n\n")
+		fmt.Printf("📖 More help: https://github.com/rtitz/aws-s3-backup#authentication\n\n")
+		return fmt.Errorf("❌ authentication failed")
 	}
 
-	// Depending on the mode start controlBackup or controlRestore
-	if *mode == "backup" {
-		backupUtils.ControlBackup(ctx, cfg, *inputFile)
-	} else if *mode == "restore" {
-		restoreUtils.ControlRestore(ctx, cfg, *bucket, *prefix, *inputFile, *downloadLocation, *retrievalMode, *restoreWithoutConfirmation, *autoRetryDownloadMinutes, *restoreExpiresAfterDays)
+	switch cfg.Mode {
+	case "backup":
+		backupService := services.NewBackupService(awsCfg)
+		return backupService.ProcessBackup(ctx, cfg.InputFile, cfg.DryRun)
+	case "restore":
+		restoreService := services.NewRestoreService(awsCfg)
+		return restoreService.ProcessRestore(ctx, cfg.Bucket, cfg.Prefix, cfg.InputFile, cfg.DownloadLocation)
+	default:
+		return fmt.Errorf("❌ invalid mode: %s", cfg.Mode)
 	}
+}
 
+type appFlags struct {
+	mode                       string
+	bucket                     string
+	prefix                     string
+	inputFile                  string
+	downloadLocation           string
+	retrievalMode              string
+	restoreWithoutConfirmation bool
+	autoRetryDownloadMinutes   int64
+	restoreExpiresAfterDays    int64
+	awsProfile                 string
+	awsRegion                  string
+	version                    bool
+	dryRun                     bool
+}
+
+func parseFlags() *appFlags {
+	flags := &appFlags{}
+	flag.StringVar(&flags.mode, "mode", "backup", "Operation mode (backup or restore)")
+	flag.StringVar(&flags.bucket, "bucket", "", "S3 bucket name for restore mode")
+	flag.StringVar(&flags.prefix, "prefix", "", "S3 object prefix filter for restore mode")
+	flag.StringVar(&flags.inputFile, "json", "", "JSON file with input parameters")
+	flag.StringVar(&flags.downloadLocation, "destination", "", "Download location for restore mode")
+	flag.StringVar(&flags.retrievalMode, "retrievalMode", "bulk", "Retrieval mode (bulk or standard) for Glacier objects")
+	flag.BoolVar(&flags.restoreWithoutConfirmation, "restoreWithoutConfirmation", false, "Skip confirmation for Glacier restores")
+	flag.Int64Var(&flags.autoRetryDownloadMinutes, "autoRetryDownloadMinutes", 0, "Auto-retry download interval in minutes (min 60)")
+	flag.Int64Var(&flags.restoreExpiresAfterDays, "restoreExpiresAfterDays", 3, "Days restore is available in Standard storage")
+	flag.StringVar(&flags.awsProfile, "profile", "default", "AWS CLI profile name")
+	flag.StringVar(&flags.awsRegion, "region", "us-east-1", "AWS region")
+	flag.BoolVar(&flags.version, "version", false, "Print version")
+	flag.BoolVar(&flags.dryRun, "dryrun", false, "Test mode - skip S3 uploads")
+	flag.Parse()
+
+	flags.mode = strings.ToLower(flags.mode)
+	flags.retrievalMode = strings.ToLower(flags.retrievalMode)
+
+	return flags
 }
