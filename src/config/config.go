@@ -10,6 +10,21 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
+// Default values for configuration parameters
+const (
+	DefaultMode                     = "backup"
+	DefaultAWSProfile               = "default"
+	DefaultAWSRegion                = "us-east-1"
+	DefaultRetrievalMode            = "bulk"
+	DefaultRestoreExpiresAfterDays  = 3
+	DefaultArchiveSplitMB           = 250
+	DefaultCleanupTmpStorage        = true
+	
+	// File extensions and constants
+	ArchiveExtension = "tar.gz"
+	EncryptionExt    = "enc"
+)
+
 type Config struct {
 	Mode                       string
 	InputFile                  string
@@ -101,13 +116,13 @@ func ParseCleanupFlag(cleanup string) bool {
 	case "false", "no":
 		return false
 	default:
-		return true
+		return DefaultCleanupTmpStorage
 	}
 }
 
 func ParseArchiveSplitMB(splitMB string) (int64, error) {
 	if splitMB == "" {
-		return 250, nil
+		return DefaultArchiveSplitMB, nil
 	}
 	mb, err := strconv.ParseInt(splitMB, 10, 64)
 	if err != nil {

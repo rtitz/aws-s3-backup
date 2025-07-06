@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -34,11 +35,19 @@ func NewBackupService(cfg aws.Config) *BackupService {
 }
 
 func (s *BackupService) ProcessBackup(ctx context.Context, inputFile string, dryRun bool) error {
-	fmt.Printf("\nMODE: BACKUP\n\n")
+	fmt.Printf("\nMODE: BACKUP\n")
+	fmt.Printf("REGION: %s\n\n", s.cfg.Region)
 
 	tasks, err := config.LoadTasks(inputFile)
 	if err != nil {
 		return fmt.Errorf("failed to load tasks: %w", err)
+	}
+
+	// Validate buckets exist before processing (skip in dry-run)
+	if !dryRun {
+		if err := s.validateBuckets(ctx, tasks); err != nil {
+			return err
+		}
 	}
 
 	for _, task := range tasks {
@@ -87,7 +96,7 @@ func (s *BackupService) processContent(ctx context.Context, task config.Task, co
 	archiveName := filepath.Base(contentPath)
 	archivePath := filepath.Join(task.TmpStorageToBuildArchives, archiveName)
 
-	fullArchivePath := archivePath + "." + utils.ArchiveExtension
+	fullArchivePath := archivePath + "." + config.ArchiveExtension
 	if err := utils.CreateArchive([]string{contentPath}, fullArchivePath); err != nil {
 		return fmt.Errorf("failed to build archive: %w", err)
 	}
@@ -157,6 +166,10 @@ func (s *BackupService) buildS3Path(task config.Task, contentPath string) string
 	if !strings.HasPrefix(trimmedPath, "/") {
 		trimmedPath = "/" + trimmedPath
 	}
+
+	if task.S3Prefix == "" {
+		return strings.TrimPrefix(trimmedPath, "/")
+	}
 	return filepath.Clean(task.S3Prefix) + trimmedPath
 }
 
@@ -176,7 +189,7 @@ func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket,
 		s3Key := s3Path + filepath.Base(part)
 		s.summary.TotalFiles++
 		if dryRun {
-			log.Printf("⬆️ [DRY-RUN] Would upload (%d/%d): %s (%.2f %s) to s3://%s/%s", i+1, len(parts), part, sizeFloat, unit, bucket, s3Key)
+			log.Printf("⬆️  [DRY-RUN] Would upload (%d/%d): %s (%.2f %s) to s3://%s/%s", i+1, len(parts), part, sizeFloat, unit, bucket, s3Key)
 			s.summary.SuccessfulUploads++
 		} else {
 			log.Printf("⬆️ Uploading (%d/%d): %s (%.2f %s)", i+1, len(parts), part, sizeFloat, unit)
@@ -197,9 +210,21 @@ func (s *BackupService) uploadAdditionalFiles(ctx context.Context, tasks []confi
 	}
 
 	bucket := tasks[0].S3Bucket
-	prefix := filepath.Clean(tasks[0].S3Prefix) + "/"
+	var prefix string
+	if tasks[0].S3Prefix == "" {
+		prefix = ""
+	} else {
+		prefix = filepath.Clean(tasks[0].S3Prefix) + "/"
+	}
 
-	files := []string{inputFile}
+	// Create sanitized version of input.json without encryption secrets
+	sanitizedFile, err := s.createSanitizedInputFile(inputFile, tasks)
+	if err != nil {
+		return fmt.Errorf("failed to create sanitized input file: %w", err)
+	}
+	defer os.Remove(sanitizedFile)
+
+	files := []string{sanitizedFile}
 
 	for _, file := range files {
 		_, err := utils.GetFileChecksum(file)
@@ -207,18 +232,18 @@ func (s *BackupService) uploadAdditionalFiles(ctx context.Context, tasks []confi
 			return fmt.Errorf("failed to get file info for %s: %w", file, err)
 		}
 
-		s3Key := prefix + filepath.Base(file)
+		s3Key := prefix + filepath.Base(inputFile) // Use original filename for S3 key
 		s.summary.TotalFiles++
 		if dryRun {
-			log.Printf("⬆️ [DRY-RUN] Would upload additional file: %s to s3://%s/%s", file, bucket, s3Key)
+			log.Printf("⬆️  [DRY-RUN] Would upload additional file: %s to s3://%s/%s", filepath.Base(inputFile), bucket, s3Key)
 			s.summary.SuccessfulUploads++
 		} else {
-			log.Printf("⬆️ Uploading additional file: %s", filepath.Base(file))
+			log.Printf("⬆️ Uploading additional file: %s", filepath.Base(inputFile))
 			if err := utils.UploadFile(ctx, s.cfg, file, bucket, s3Key, types.StorageClassStandard); err != nil {
 				s.summary.FailedUploads++
-				return fmt.Errorf("❌ failed to upload additional file %s: %w", file, err)
+				return fmt.Errorf("❌ failed to upload additional file %s: %w", filepath.Base(inputFile), err)
 			}
-			log.Printf("✅ Additional file uploaded: %s", filepath.Base(file))
+			log.Printf("✅ Additional file uploaded: %s", filepath.Base(inputFile))
 			s.summary.SuccessfulUploads++
 		}
 	}
@@ -231,6 +256,49 @@ func (s *BackupService) cleanupFiles(files []string) {
 	for _, file := range files {
 		os.Remove(file)
 	}
+}
+
+func (s *BackupService) validateBuckets(ctx context.Context, tasks []config.Task) error {
+	buckets := make(map[string]bool)
+	for _, task := range tasks {
+		buckets[task.S3Bucket] = true
+	}
+
+	for bucket := range buckets {
+		region, err := utils.ValidateBucketExistsWithRegion(ctx, s.cfg, bucket)
+		if err != nil {
+			return fmt.Errorf("❌ S3 bucket '%s' does not exist or is not accessible: %w", bucket, err)
+		}
+		regionInfo := utils.GetRegionInfo(region)
+		gdprStatus := "⚠️  Non-GDPR"
+		if regionInfo.GDPRCompliant {
+			gdprStatus = "🔒 GDPR"
+		}
+		log.Printf("✅ S3 bucket validated: %s (region: %s %s %s %s)", bucket, region, regionInfo.Flag, regionInfo.Country, gdprStatus)
+	}
+	return nil
+}
+
+func (s *BackupService) createSanitizedInputFile(inputFile string, tasks []config.Task) (string, error) {
+	// Create sanitized tasks with empty encryption secrets
+	sanitizedTasks := make([]config.Task, len(tasks))
+	for i, task := range tasks {
+		sanitizedTasks[i] = task
+		sanitizedTasks[i].EncryptionSecret = "********" // Remove encryption secret
+	}
+
+	// Create temporary file
+	tempFile := inputFile + ".sanitized.tmp"
+	data, err := json.MarshalIndent(map[string][]config.Task{"tasks": sanitizedTasks}, "", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.WriteFile(tempFile, data, 0644); err != nil {
+		return "", err
+	}
+
+	return tempFile, nil
 }
 
 func (s *BackupService) printSummary(dryRun bool) {

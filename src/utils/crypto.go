@@ -10,13 +10,14 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/rtitz/aws-s3-backup/config"
 	"golang.org/x/crypto/scrypt"
 )
 
 // EncryptFile encrypts a file with AES-256-GCM
 func EncryptFile(inputPath, password string) (string, error) {
 	log.Printf("🔒 Encrypting file: %s", filepath.Base(inputPath))
-	
+
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return "", err
@@ -27,9 +28,9 @@ func EncryptFile(inputPath, password string) (string, error) {
 		return "", err
 	}
 
-	outputPath := inputPath + "." + EncryptionExt
+	outputPath := inputPath + "." + config.EncryptionExt
 	err = os.WriteFile(outputPath, encrypted, 0644)
-	
+
 	if err == nil {
 		log.Printf("✅ File encrypted successfully: %s", filepath.Base(outputPath))
 	}
@@ -38,8 +39,8 @@ func EncryptFile(inputPath, password string) (string, error) {
 
 // DecryptFile decrypts a file encrypted with AES-256-GCM
 func DecryptFile(inputPath, password string) (string, error) {
-	log.Printf("🔓 Decrypting file: %s", filepath.Base(inputPath))
-	
+	//log.Printf("🔓 Decrypting file: %s", filepath.Base(inputPath))
+
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return "", err
@@ -50,11 +51,11 @@ func DecryptFile(inputPath, password string) (string, error) {
 		return "", err
 	}
 
-	outputPath := strings.TrimSuffix(inputPath, "."+EncryptionExt)
+	outputPath := strings.TrimSuffix(inputPath, "."+config.EncryptionExt)
 	err = os.WriteFile(outputPath, decrypted, 0644)
-	
+
 	if err == nil {
-		log.Printf("✅ File decrypted successfully: %s", filepath.Base(outputPath))
+		//log.Printf("✅ File decrypted successfully: %s", filepath.Base(outputPath))
 	}
 	return outputPath, err
 }

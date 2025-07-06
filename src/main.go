@@ -57,7 +57,9 @@ func run() error {
 	
 	// Skip AWS authentication for dry-run backup mode
 	if cfg.Mode == "backup" && cfg.DryRun {
-		log.Println("[DRY-RUN] Skipping AWS authentication - no S3 operations will be performed")
+		log.Println("⚠️  [DRY-RUN] Skipping AWS authentication - no S3 operations will be performed")
+		log.Println("⚠️  [DRY-RUN] No bucket validation or AWS connectivity checks performed")
+		log.Println("⚠️  [DRY-RUN] Ensure bucket exists and credentials work before real backup")
 		backupService := services.NewBackupService(aws.Config{})
 		return backupService.ProcessBackup(ctx, cfg.InputFile, cfg.DryRun)
 	}
@@ -116,17 +118,17 @@ type appFlags struct {
 
 func parseFlags() *appFlags {
 	flags := &appFlags{}
-	flag.StringVar(&flags.mode, "mode", "backup", "Operation mode (backup or restore)")
+	flag.StringVar(&flags.mode, "mode", config.DefaultMode, "Operation mode (backup or restore)")
 	flag.StringVar(&flags.bucket, "bucket", "", "S3 bucket name for restore mode")
 	flag.StringVar(&flags.prefix, "prefix", "", "S3 object prefix filter for restore mode")
 	flag.StringVar(&flags.inputFile, "json", "", "JSON file with input parameters")
 	flag.StringVar(&flags.downloadLocation, "destination", "", "Download location for restore mode")
-	flag.StringVar(&flags.retrievalMode, "retrievalMode", "bulk", "Retrieval mode (bulk or standard) for Glacier objects")
+	flag.StringVar(&flags.retrievalMode, "retrievalMode", config.DefaultRetrievalMode, "Retrieval mode (bulk or standard) for Glacier objects")
 	flag.BoolVar(&flags.restoreWithoutConfirmation, "restoreWithoutConfirmation", false, "Skip confirmation for Glacier restores")
 	flag.Int64Var(&flags.autoRetryDownloadMinutes, "autoRetryDownloadMinutes", 0, "Auto-retry download interval in minutes (min 60)")
-	flag.Int64Var(&flags.restoreExpiresAfterDays, "restoreExpiresAfterDays", 3, "Days restore is available in Standard storage")
-	flag.StringVar(&flags.awsProfile, "profile", "default", "AWS CLI profile name")
-	flag.StringVar(&flags.awsRegion, "region", "us-east-1", "AWS region")
+	flag.Int64Var(&flags.restoreExpiresAfterDays, "restoreExpiresAfterDays", config.DefaultRestoreExpiresAfterDays, "Days restore is available in Standard storage")
+	flag.StringVar(&flags.awsProfile, "profile", config.DefaultAWSProfile, "AWS CLI profile name")
+	flag.StringVar(&flags.awsRegion, "region", config.DefaultAWSRegion, "AWS region")
 	flag.BoolVar(&flags.version, "version", false, "Print version")
 	flag.BoolVar(&flags.dryRun, "dryrun", false, "Test mode - skip S3 uploads")
 	flag.Parse()
