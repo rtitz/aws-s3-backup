@@ -1,4 +1,4 @@
-# Example of a backup
+# 💾 Example of a backup
 
 **[Back](../README.md)**
 
@@ -32,7 +32,7 @@
 └── tmp <- This is an empty directory
 ```
 
-  * Here is how your my-input.json could look like:
+  * 📄 Here is how your my-input.json could look like:
 ```json
 {
     "tasks": [
@@ -54,17 +54,21 @@
 }
 ```
 
-  * Here is how to execute this:
+  * ▶️ Here is how to execute this:
 ```bash
 export AWS_ACCESS_KEY_ID="AKXXXXXXXXX"
 export AWS_SECRET_ACCESS_KEY="XXXXXXXXXXXXXXXXX"
 
-aws-s3-backup_macos-arm64 -json my-input.json 
+# Normal backup
+aws-s3-backup_macos-arm64 -json my-input.json
+
+# Or test with dry-run (no S3 upload)
+aws-s3-backup_macos-arm64 -json my-input.json -dryrun 
 ```
 
-  * Output will be similar to:
+  * 📝 Output will be similar to:
 ```
-AWS-S3-BACKUP 1.1.0
+AWS-S3-BACKUP 1.3.1
 
 Authentication via AWS environment variables... Successful!
 
@@ -129,6 +133,19 @@ MODE: BACKUP
 2024/01/31 19:46:55 Upload of additional JSON files: OK
 ```
 
-  * Everything in 'Content' part of the my-input.json is uploaded to S3 bucket "my-s3-backup-bucket" and placed with their full paths into folder "backup" in this bucket.
+  * 📋 Dry-run output would show:
+```
+AWS-S3-BACKUP 1.3.1
+
+MODE: BACKUP
+
+[DRY-RUN] Would upload (1/4): test-directory.tar.gz (2.30 MB) to s3://my-s3-backup-bucket/backup/Users/rtitz/test-directory.tar.gz
+[DRY-RUN] Would upload (2/4): test.file.tar.gz (0.57 MB) to s3://my-s3-backup-bucket/backup/Users/rtitz/test.file.tar.gz
+[DRY-RUN] Would upload (3/4): test2.file.tar.gz (0.49 MB) to s3://my-s3-backup-bucket/backup/Users/rtitz/test2.file.tar.gz
+[DRY-RUN] Would upload (4/4): new-file.tar.gz (0.11 MB) to s3://my-s3-backup-bucket/backup/Users/rtitz/dir/dir2/new-file.tar.gz
+[DRY-RUN] Would upload additional file: my-input.json to s3://my-s3-backup-bucket/backup/my-input.json
+```
+
+  * ✅ Everything in 'Content' part of the my-input.json is uploaded to S3 bucket "my-s3-backup-bucket" and placed with their full paths into folder "backup" in this bucket.
 
 **[Back](../README.md)**

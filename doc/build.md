@@ -1,32 +1,48 @@
-# Build it on your own from source
+# 🔨 Build it on your own from source
 
 **[Back](../README.md)**
 
 You can just use the pre-compiled binaries in the 'bin/' directory. 
 But if you prefer to build it on your own, here is how to do this.
 
-## How to build the executable binary (if you don't like the pre-compiled in the 'bin' directory)
- * [Install Go](https://go.dev/doc/install)
- * Build the binary for your current platform:
+## 🛠️ How to build the executable binary (if you don't like the pre-compiled in the 'bin' directory)
+ * 📦 [Install Go](https://go.dev/doc/install)
+ * 🔨 Build the binary for your current platform:
 ```
 cd src/
-go build -ldflags "-s -w" .
+go build -o ../bin/aws-s3-backup .
 ```
- * Build the binary for many platforms:
+ * 🌍 Build the binary for many platforms:
 ```
 cd src/
-go get -u && go mod tidy
+go mod tidy
 bash build.sh  # Not running on Windows
 ```
 
-
-## How to execute it directly (without building the binary in advance or using the pre-compiled)
- * [Install Go](https://go.dev/doc/install)
-  * Execute:
+## 🧪 How to run tests
+ * ▶️ Run all tests:
 ```
 cd src/
-go run .
+go test ./...
+```
+ * 📈 Run tests with coverage:
+```
+cd src/
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
 ```
 
+## ▶️ How to execute it directly (without building the binary in advance or using the pre-compiled)
+ * 📦 [Install Go](https://go.dev/doc/install)
+ * ▶️ Execute:
+```
+cd src/
+go run . -help
+```
+ * 📋 Test with dry-run:
+```
+cd src/
+go run . -json ../example-input.json -dryrun
+```
 
 **[Back](../README.md)**

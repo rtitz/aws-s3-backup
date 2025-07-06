@@ -1,9 +1,18 @@
 # AWS S3 Backup
-This is a tool created in Go to backup data to [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/).\
-It will create tar.gz archives out of the paths you input in input.json (see 'example-input.json')\
-Then it will split these archives into smaller chunks, if they are large (configurable, see 'example-input.json')\
-It will upload the archives to the S3 bucket speciefied in input.json file and store it in the StorageClass choosen by you.\
-Checksums are caclulated and verifed to ensure the integrity of uploaded data to S3.\
+This is a robust tool created in Go to backup data to [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/).\
+It creates tar.gz archives from specified paths, splits large archives into configurable chunks, and uploads them to S3 with your chosen storage class.\
+Features comprehensive error handling, input validation, and checksum verification to ensure data integrity.\
+
+## ✨ Key Features
+- 🛡️ **Reliable Error Handling**: Graceful error recovery instead of crashes
+- ✅ **Input Validation**: Comprehensive configuration validation
+- 🏗️ **Modular Architecture**: Clean separation of concerns for maintainability
+- 🧪 **Unit Testing**: Test coverage for critical components
+- ⚙️ **Flexible Configuration**: Support for multiple storage classes and encryption
+- 🔗 **Automatic Archive Combination**: Split archives are automatically combined during restore
+- 🚀 **Multi-Core Compression**: Uses parallel gzip compression for faster archive creation
+- 📋 **Dry-Run Mode**: Test backups locally without uploading to S3
+- 📊 **Summary Reports**: Detailed operation summaries with success/failure counts
 
   * See: [Example of a backup](doc/example-backup.md)
   * See: [Example of a restore](doc/example-restore.md)
@@ -12,7 +21,7 @@ Checksums are caclulated and verifed to ensure the integrity of uploaded data to
 This [link](https://calculator.aws/) can help you calculating the chages
 
 
-## Requirements for AWS S3 Backup
+## 📋 Requirements for AWS S3 Backup
  * There are CloudFormation templates in directory "cloudformation", that can be used to deploy the requirements
 
 Here are the requirements in detail, in case you do not want to use the provided CloudFormation templates:
@@ -54,7 +63,7 @@ Here are the requirements in detail, in case you do not want to use the provided
 ```
 
 
-## Usage in general
+## 🚀 Usage in general
   * In the directory 'bin/' you will find pre-compiled executable binaries for different operating systems. You can just execute them in a terminal.
   * See 'example-input.json' and build your own input.json
   * See: [Example of a backup](doc/example-backup.md)
@@ -65,7 +74,31 @@ Here are the requirements in detail, in case you do not want to use the provided
 aws-s3-backup_macos-arm64 -help
 ```
 
-## Backup your data
+## 🛠️ Development
+
+### 🔨 Building from Source
+```bash
+# Build the application
+cd src && go build -o ../bin/aws-s3-backup .
+
+# Run tests
+cd src && go test ./...
+
+# Run tests with coverage
+cd src && go test -coverprofile=coverage.out ./...
+cd src && go tool cover -html=coverage.out -o coverage.html
+
+# Build for all platforms
+cd src && ./build.sh
+```
+
+### 📁 Code Structure
+- `config/` - Configuration management and validation
+- `services/` - Business logic services (backup, restore)
+- `utils/` - Consolidated utilities (AWS, files, crypto, archive)
+- `tests/` - Unit tests
+
+## 💾 Backup your data
   * Execute with **your** input.json
 ```
 aws-s3-backup_macos-arm64 -json ~/tmp/input.json
@@ -75,9 +108,14 @@ aws-s3-backup_macos-arm64 -json ~/tmp/input.json
 ```
 aws-s3-backup_macos-arm64 -json ~/tmp/input.json -profile test -region eu-central-1
 ```
+
+  * Test backup locally without uploading to S3 (dry-run mode)
+```
+aws-s3-backup_macos-arm64 -json ~/tmp/input.json -dryrun
+```
 **NOTE:** Default AWS CLI profile is: 'default' and default AWS region is 'us-east-1'.
 
-## Restore your backup
+## 📥 Restore your backup
   * List your buckets
 ```
 aws-s3-backup_macos-arm64 -mode restore 
@@ -92,7 +130,9 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination
 aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json generated-restore-input.json
 ```
 
-## Command line parameters
+**Note**: Split archives are automatically detected and combined back into single files during restore. No manual intervention required.
+
+## ⚙️ Command line parameters
 
 ### json
  * Specify the path to input.json (see below)
@@ -143,10 +183,17 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json genera
   * Restore objects from Glacier / archive storage classes to standard storage class has to be confirmed per object. If this parameter is specified, restores will be done without confirmation!
   * By default this parameter is not specified
 
+### dryrun
+  * Test mode that performs all backup operations except S3 uploads
+  * Creates archives, splits files, encrypts data, but skips uploading to S3
+  * Useful for testing configurations and measuring local performance
+  * No AWS credentials required in dry-run mode
+  * Shows what would be uploaded with detailed logging
 
-## The 'input.json' file for backups
 
-### StorageClasses
+## 📄 The 'input.json' file for backups
+
+### 🗄️ StorageClasses
 
 The following values for 'StorageClass' in JSON input file are supported:
   * STANDARD
@@ -185,8 +232,16 @@ For more info about the different StorageClasses and AWS S3 pricing in general s
   * Default value (also if unset!) is: "" (Encryption disabled / Nothing will be encrypted)
   * If you set a value, this is going to be your secret used to encrypt the archive (or archive parts) before upload. (AES-256-GCM)
   * During restore you will be asked for the secret to decrypt the file(s)
+  * 🔒 **Password Requirements for Security:**
+    * Minimum 12 characters (16+ recommended)
+    * At least one uppercase letter (A-Z)
+    * At least one lowercase letter (a-z)
+    * At least one number (0-9)
+    * At least one special character (!@#$%^&*)
+    * No common dictionary words or patterns
+    * Example passwords from documentation are blocked for security
 
-## Authentication via environment variables (instead of AWS CLI)
+## 🔐 Authentication via environment variables (instead of AWS CLI)
   * Do not specify the parameter -profile
   * If you sign in via the AWS IAM Identity Center, you will find the button 'Command line or programmatic access', you can copy the AWS environment variable commands from here and execute aws-s3-backup tool afterwards.
   * Before executing aws-s3-backup tool, set environment variables as follows (If not copied from AWS IAM Identity Center sign in page):
@@ -207,6 +262,28 @@ aws-s3-backup.exe
 
   * HINT: You can create an IAM User in the AWS IAM Console and an Access Key for this user to get AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY. (There is also a CloudFormation template to create the user.)
   * **NEVER SHARE THESE KEYS WITH OTHERS!**
+
+## 🛡️ Error Handling
+The application now features robust error handling:
+- **Graceful failures**: No more unexpected crashes
+- **Detailed error messages**: Clear indication of what went wrong with ❌ prefix
+- **Input validation**: Configuration errors caught early
+- **Password validation**: Strong encryption password requirements enforced
+- **Retry logic**: Network failures handled appropriately
+- **Operation summaries**: Comprehensive reports showing what succeeded, failed, or was skipped
+
+## 🧪 Testing
+Run the test suite to verify functionality:
+```bash
+cd src
+go test ./...
+```
+
+For coverage reports:
+```bash
+cd src && go test -coverprofile=coverage.out ./...
+cd src && go tool cover -html=coverage.out -o coverage.html
+```
 
 ---
 ## [Build it on your own from source](doc/build.md)
