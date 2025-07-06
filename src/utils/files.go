@@ -68,23 +68,39 @@ func CombineFiles(downloadDir string) error {
 	splitGroups := make(map[string][]string)
 	partPattern := regexp.MustCompile(`^(.+)-part(\d{5})$`)
 
-	entries, err := os.ReadDir(downloadDir)
+	// Walk through all directories recursively
+	err := filepath.Walk(downloadDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		
+		filename := info.Name()
+		matches := partPattern.FindStringSubmatch(filename)
+		if len(matches) == 3 {
+			baseName := matches[1]
+			// Use relative path from downloadDir as the key
+			relPath, _ := filepath.Rel(downloadDir, filepath.Dir(path))
+			if relPath == "." {
+				relPath = ""
+			}
+			key := filepath.Join(relPath, baseName)
+			log.Printf("🔍 Found split file: %s (group: %s)", filename, key)
+			splitGroups[key] = append(splitGroups[key], path)
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		matches := partPattern.FindStringSubmatch(entry.Name())
-		if len(matches) == 3 {
-			baseName := matches[1]
-			fullPath := filepath.Join(downloadDir, entry.Name())
-			splitGroups[baseName] = append(splitGroups[baseName], fullPath)
-		}
+	if len(splitGroups) == 0 {
+		log.Printf("ℹ️ No split files found to combine")
+		return nil
 	}
-
+	
 	for baseName, parts := range splitGroups {
 		if len(parts) > 1 {
 			log.Printf("🔗 Combining %d parts for %s", len(parts), baseName)
@@ -93,6 +109,12 @@ func CombineFiles(downloadDir string) error {
 			})
 			if err := combineFileParts(parts, baseName, downloadDir); err != nil {
 				return err
+			}
+			// Remove HowToBuild.txt file if it exists
+			howToFile := filepath.Join(downloadDir, baseName+"-HowToBuild.txt")
+			if _, err := os.Stat(howToFile); err == nil {
+				os.Remove(howToFile)
+				log.Printf("🗑️ Removed instruction file: %s-HowToBuild.txt", baseName)
 			}
 			log.Printf("✅ Successfully combined %s", baseName)
 		}
@@ -110,8 +132,12 @@ func extractPartNumber(filename string) int {
 	return 0
 }
 
-func combineFileParts(parts []string, baseName, dir string) error {
-	outputPath := filepath.Join(dir, baseName)
+func combineFileParts(parts []string, baseName, downloadDir string) error {
+	outputPath := filepath.Join(downloadDir, baseName)
+	// Ensure output directory exists
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+		return err
+	}
 	output, err := os.Create(outputPath)
 	if err != nil {
 		return err
