@@ -1,6 +1,6 @@
 module github.com/rtitz/aws-s3-backup
 
-go 1.24.4
+go 1.24.5
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.36.5
@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.83
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.83.0
 	github.com/klauspost/pgzip v1.2.6
-	golang.org/x/crypto v0.39.0
+	golang.org/x/crypto v0.40.0
 )
 
 require (

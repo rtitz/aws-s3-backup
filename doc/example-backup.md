@@ -68,69 +68,58 @@ aws-s3-backup_macos-arm64 -json my-input.json -dryrun
 
   * 📝 Output will be similar to:
 ```
-AWS-S3-BACKUP 1.3.1
-
-Authentication via AWS environment variables... Successful!
+AWS-S3-BACKUP 1.3.4
 
 MODE: BACKUP
+REGION: us-east-1
 
-2024/01/31 19:46:52 Creating archive...
-2024/01/31 19:46:52 Add test-directory/NEW to archive...
-2024/01/31 19:46:52 Add test-directory/go.mod to archive...
-2024/01/31 19:46:52 Add test-directory/go.sum to archive...
-2024/01/31 19:46:52 Add test-directory/main.go to archive...
-2024/01/31 19:46:52 Add test-directory/notifications/mail.go to archive...
-2024/01/31 19:46:52 Add test-directory/test.file to archive...
-2024/01/31 19:46:52 Archive created successfully
-2024/01/31 19:46:52 S3 path: s3://my-s3-backup-bucket/backup/Users/rtitz/test-directory.tar.gz
-2024/01/31 19:46:52 Local path: /Users/rtitz/tmp/test-directory.tar.gz
-2024/01/31 19:46:52 Size: 2.30 KB
-2024/01/31 19:46:52 StorageClass: STANDARD
-2024/01/31 19:46:52 Upload...
-2024/01/31 19:46:53 Checksum eKAudS57/6mBVMtqKKmeocy18rd4sea8prI3jiSX3Q8= : OK
-2024/01/31 19:46:53  100.00 % (1/1) UPLOADED - DONE!
-============================================================================
+📦 Creating archive: test-directory.tar.gz
+➡️ Adding to archive: test-directory/NEW
+➡️ Adding to archive: test-directory/go.mod
+✅ Archive created successfully: test-directory.tar.gz
+⬆️ Uploading (1/4): test-directory.tar.gz (2.30 KB)
+✅ Upload successful: test-directory.tar.gz
 
-2024/01/31 19:46:53 Creating archive...
-2024/01/31 19:46:53 Add test.file to archive...
-2024/01/31 19:46:53 Archive created successfully
-2024/01/31 19:46:53 S3 path: s3://my-s3-backup-bucket/backup/Users/rtitz/test.file.tar.gz
-2024/01/31 19:46:53 Local path: /Users/rtitz/tmp/test.file.tar.gz
-2024/01/31 19:46:53 Size: 586.00 B
-2024/01/31 19:46:53 StorageClass: STANDARD
-2024/01/31 19:46:53 Upload...
-2024/01/31 19:46:53 Checksum qMxdNnoj0VT97SAAEFd/kcvzeFg9wAjRMKlJd/b+QZk= : OK
-2024/01/31 19:46:53  100.00 % (1/1) UPLOADED - DONE!
-============================================================================
+==================================================
+📊 BACKUP SUMMARY
+==================================================
+✅ Successfully uploaded: 4
+📁 Total files processed: 5
+💾 Total data processed: 3.67 KB
+⏱️ Preparation time: 1.2s
+⏱️ Upload time: 2.3s
+⏱️ Total time: 3.5s
 
-2024/01/31 19:46:53 Creating archive...
-2024/01/31 19:46:53 Add test2.file to archive...
-2024/01/31 19:46:53 Archive created successfully
-2024/01/31 19:46:53 S3 path: s3://my-s3-backup-bucket/backup/Users/rtitz/test2.file.tar.gz
-2024/01/31 19:46:53 Local path: /Users/rtitz/tmp/test2.file.tar.gz
-2024/01/31 19:46:53 Size: 500.00 B
-2024/01/31 19:46:53 StorageClass: STANDARD
-2024/01/31 19:46:53 Upload...
-2024/01/31 19:46:54 Checksum y3YpCD2t5MXFQDiMx/ccVo+7Dm1abQbwpDu9sOkoS3k= : OK
-2024/01/31 19:46:54  100.00 % (1/1) UPLOADED - DONE!
-============================================================================
+🎉 Backup completed successfully!
+==================================================
+```
 
-2024/01/31 19:46:54 Creating archive...
-2024/01/31 19:46:54 Add new-file to archive...
-2024/01/31 19:46:54 Archive created successfully
-2024/01/31 19:46:54 S3 path: s3://my-s3-backup-bucket/backup/Users/rtitz/dir/dir2/new-file.tar.gz
-2024/01/31 19:46:54 Local path: /Users/rtitz/tmp/new-file.tar.gz
-2024/01/31 19:46:54 Size: 113.00 B
-2024/01/31 19:46:54 StorageClass: STANDARD
-2024/01/31 19:46:54 Upload...
-2024/01/31 19:46:54 Checksum NXnzWWlpXyS5PCyWZ3UGiL/E1p7eDCDO9ZpszcMT1cY= : OK
-2024/01/31 19:46:54  100.00 % (1/1) UPLOADED - DONE!
-============================================================================
+  * 📋 Dry-run output would show:
+```
+AWS-S3-BACKUP 1.3.4
 
-2024/01/31 19:46:54 Upload of additional JSON files...
-2024/01/31 19:46:55 Checksum cBYlHIN2TMmJpriF+yXHWdWQyvCHQtzFZ3eAZrkQr4o= : OK
-2024/01/31 19:46:55 Checksum 5zkLtNqJQOfrhHXg/7Hbya2QaiA+IQYOIvRSGuWDXsE= : OK
-2024/01/31 19:46:55 Upload of additional JSON files: OK
+MODE: BACKUP
+REGION: DRY-RUN
+
+📦 Creating archive: test-directory.tar.gz
+➡️ Adding to archive: test-directory/NEW
+✅ Archive created successfully: test-directory.tar.gz
+⬆️ [DRY-RUN] Would upload (1/4): test-directory.tar.gz (2.30 KB)
+⬆️ [DRY-RUN] Would upload additional file: my-input.json
+
+==================================================
+📋 BACKUP SUMMARY (DRY-RUN)
+==================================================
+✅ Files that would be uploaded: 5
+📁 Total files processed: 5
+💾 Total data processed: 3.67 KB
+⏱️ Preparation time: 1.2s
+⏱️ Upload time (simulated): 45ms
+⏱️ Total time: 1.3s
+
+🎉 Dry-run completed successfully!
+==================================================
+
 ```
 
   * 📋 Dry-run output would show:
@@ -147,5 +136,100 @@ MODE: BACKUP
 ```
 
   * ✅ Everything in 'Content' part of the my-input.json is uploaded to S3 bucket "my-s3-backup-bucket" and placed with their full paths into folder "backup" in this bucket.
+  * 🔄 **Smart uploads**: If you run the same backup again, existing files will be skipped automatically
+  * ⏭️ **Skip existing files**: Shows `⏭️ Skipping: filename (already exists in S3)` for files that don't need re-upload
+  * 🌐 **Network resilience**: Automatically retries network failures for up to 12 hours
+  * 🛡️ **Safe operations**: Never overwrites existing data, aborts upload if safety cannot be verified
+  * 🕰️ **Timestamp preservation**: Original file and directory timestamps stored in archives
+  * 📊 **Enhanced summary**: Displays count of uploaded, skipped, and failed files
 
 **[Back](../README.md)**
+## 🔄 Smart Upload Example
+
+When running the same backup multiple times:
+
+**First run:**
+```
+⬆️ Uploading (1/3): test-directory.tar.gz (2.30 KB)
+✅ Upload successful: test-directory.tar.gz
+⬆️ Uploading (2/3): test.file.tar.gz (0.57 KB)
+✅ Upload successful: test.file.tar.gz
+⬆️ Uploading additional file: my-input.json
+✅ Additional file uploaded: my-input.json
+
+📊 BACKUP SUMMARY
+✅ Successfully uploaded: 3
+📁 Total files processed: 3
+```
+
+**Second run (same files):**
+```
+⏭️ Skipping (1/3): test-directory.tar.gz (already exists in S3)
+⏭️ Skipping (2/3): test.file.tar.gz (already exists in S3)
+⏭️ Skipping additional file: my-input.json (already exists in S3)
+
+📊 BACKUP SUMMARY
+⏭️ Skipped (already exists): 3
+📁 Total files processed: 3
+```
+
+This prevents unnecessary uploads and reduces costs significantly.
+## 🌐 Network Interruption Handling
+
+If network connection is lost during backup:
+
+```
+⬆️ Uploading (3/10): file003.tar.gz (1.8 MB)
+⚠️ Upload file003.tar.gz failed (attempt 1): dial tcp: network is unreachable
+🔄 Retrying in 1s... (Press Ctrl+C to cancel, will retry for up to 12 hours)
+⚠️ Upload file003.tar.gz failed (attempt 2): dial tcp: network is unreachable  
+🔄 Retrying in 2s... (Press Ctrl+C to cancel, will retry for up to 12 hours)
+[Network restored]
+✅ Upload file003.tar.gz succeeded after 3 attempts
+⬆️ Uploading (4/10): file004.tar.gz (2.1 MB)
+```
+
+**Benefits:**
+- No manual intervention needed for temporary network issues
+- Completed uploads are never lost or repeated
+- User can cancel anytime with Ctrl+C
+- Automatic recovery when network returns
+## 🔐 Encrypted Backup Example
+
+Using encryption in your input.json:
+
+```json
+{
+    "tasks": [
+        {
+            "S3Bucket": "my-secure-backup-bucket",
+            "S3Prefix": "encrypted-backup",
+            "StorageClass": "STANDARD_IA",
+            "ArchiveSplitEachMB": "100",
+            "TmpStorageToBuildArchives": "/tmp/backup",
+            "CleanupTmpStorage": "true",
+            "EncryptionSecret": "MyS3cureP@ssw0rd2024!",
+            "Content": [
+                "/home/user/important-documents",
+                "/home/user/photos"
+            ]
+        }
+    ]
+}
+```
+
+**Output with encryption:**
+```
+📦 Creating archive: important-documents.tar.gz
+✅ Archive created successfully: important-documents.tar.gz
+🔒 Encrypting file: important-documents.tar.gz
+✅ File encrypted successfully: important-documents.tar.gz.enc
+⬆️ Uploading (1/2): important-documents.tar.gz.enc (15.2 MB)
+✅ Upload successful: important-documents.tar.gz.enc
+```
+
+**⚠️ CRITICAL WARNINGS:**
+- **Password required for restore** - Keep it safe and accessible
+- **Manual decryption scripts provided** - `decrypt_manual.py` and `decrypt_openssl.sh`
+- **Test your setup** - Verify you can restore before relying on encryption
+- **No password recovery** - If you lose the password, your data is permanently inaccessible
