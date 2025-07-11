@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -23,8 +24,13 @@ type BackupService struct {
 type BackupSummary struct {
 	SuccessfulUploads int
 	FailedUploads     int
+	SkippedFiles      int
 	Warnings          int
 	TotalFiles        int
+	TotalBytes        int64
+	PreparationTime   time.Duration
+	UploadTime        time.Duration
+	TotalTime         time.Duration
 }
 
 func NewBackupService(cfg aws.Config) *BackupService {
@@ -35,8 +41,14 @@ func NewBackupService(cfg aws.Config) *BackupService {
 }
 
 func (s *BackupService) ProcessBackup(ctx context.Context, inputFile string, dryRun bool) error {
+	startTime := time.Now()
+	
 	fmt.Printf("\nMODE: BACKUP\n")
-	fmt.Printf("REGION: %s\n\n", s.cfg.Region)
+	if dryRun {
+		fmt.Printf("REGION: DRY-RUN\n\n")
+	} else {
+		fmt.Printf("REGION: %s\n\n", s.cfg.Region)
+	}
 
 	tasks, err := config.LoadTasks(inputFile)
 	if err != nil {
@@ -60,6 +72,7 @@ func (s *BackupService) ProcessBackup(ctx context.Context, inputFile string, dry
 		return err
 	}
 
+	s.summary.TotalTime = time.Since(startTime)
 	s.printSummary(dryRun)
 	return nil
 }
@@ -89,6 +102,8 @@ func (s *BackupService) processTask(ctx context.Context, task config.Task, dryRu
 }
 
 func (s *BackupService) processContent(ctx context.Context, task config.Task, contentPath string, splitMB int64, storageClass types.StorageClass, cleanupTmp bool, dryRun bool) error {
+	prepStart := time.Now()
+	
 	if err := os.MkdirAll(task.TmpStorageToBuildArchives, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
@@ -107,7 +122,10 @@ func (s *BackupService) processContent(ctx context.Context, task config.Task, co
 	}
 
 	s3Path := s.buildS3Path(task, contentPath)
-
+	
+	// Track preparation time
+	s.summary.PreparationTime += time.Since(prepStart)
+	
 	if err := s.uploadParts(ctx, parts, task.S3Bucket, s3Path, storageClass, dryRun); err != nil {
 		return fmt.Errorf("failed to upload parts: %w", err)
 	}
@@ -161,19 +179,21 @@ func (s *BackupService) encryptParts(parts []string, secret string) ([]string, e
 }
 
 func (s *BackupService) buildS3Path(task config.Task, contentPath string) string {
-	archivePath := filepath.Clean(filepath.Dir(contentPath)) + "/"
-	trimmedPath := strings.TrimPrefix(archivePath, task.TrimBeginningOfPathInS3)
-	if !strings.HasPrefix(trimmedPath, "/") {
-		trimmedPath = "/" + trimmedPath
-	}
-
+	archivePath := filepath.Dir(contentPath)
+	trimmedPath := utils.TrimPathPrefix(archivePath, task.TrimBeginningOfPathInS3)
+	
 	if task.S3Prefix == "" {
-		return strings.TrimPrefix(trimmedPath, "/")
+		return trimmedPath
 	}
-	return filepath.Clean(task.S3Prefix) + trimmedPath
+	return utils.NormalizePath(task.S3Prefix) + "/" + trimmedPath
 }
 
 func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket, s3Path string, storageClass types.StorageClass, dryRun bool) error {
+	uploadStart := time.Now()
+	defer func() {
+		s.summary.UploadTime += time.Since(uploadStart)
+	}()
+	
 	for i, part := range parts {
 		_, err := utils.GetFileChecksum(part)
 		if err != nil {
@@ -188,12 +208,40 @@ func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket,
 
 		s3Key := s3Path + filepath.Base(part)
 		s.summary.TotalFiles++
+		
+		// Check if object already exists in S3 - REQUIRED for safety
+		if !dryRun {
+			var exists bool
+			err := utils.RetryWithBackoff(ctx, func() error {
+				var checkErr error
+				exists, checkErr = utils.CheckObjectExists(ctx, s.cfg, bucket, s3Key)
+				return checkErr
+			}, fmt.Sprintf("Check existence of %s", s3Key))
+			
+			if err != nil {
+				s.summary.FailedUploads++
+				return fmt.Errorf("❌ Cannot verify object existence for %s: %w. Upload aborted to prevent overwriting existing data", s3Key, err)
+			}
+			if exists {
+				log.Printf("⏭️ Skipping (%d/%d): %s (already exists in S3)", i+1, len(parts), filepath.Base(part))
+				s.summary.SkippedFiles++
+				continue
+			}
+		}
+		
+		s.summary.TotalBytes += size
 		if dryRun {
 			log.Printf("⬆️  [DRY-RUN] Would upload (%d/%d): %s (%.2f %s) to s3://%s/%s", i+1, len(parts), part, sizeFloat, unit, bucket, s3Key)
 			s.summary.SuccessfulUploads++
 		} else {
 			log.Printf("⬆️ Uploading (%d/%d): %s (%.2f %s)", i+1, len(parts), part, sizeFloat, unit)
-			if err := utils.UploadFile(ctx, s.cfg, part, bucket, s3Key, storageClass); err != nil {
+			
+			// Retry upload with exponential backoff for network errors
+			err := utils.RetryWithBackoff(ctx, func() error {
+				return utils.UploadFile(ctx, s.cfg, part, bucket, s3Key, storageClass)
+			}, fmt.Sprintf("Upload %s", filepath.Base(part)))
+			
+			if err != nil {
 				s.summary.FailedUploads++
 				return fmt.Errorf("❌ failed to upload %s: %w", part, err)
 			}
@@ -232,14 +280,47 @@ func (s *BackupService) uploadAdditionalFiles(ctx context.Context, tasks []confi
 			return fmt.Errorf("failed to get file info for %s: %w", file, err)
 		}
 
+		size, err := utils.GetFileSize(file)
+		if err != nil {
+			return fmt.Errorf("failed to get file size for %s: %w", file, err)
+		}
+
 		s3Key := prefix + filepath.Base(inputFile) // Use original filename for S3 key
 		s.summary.TotalFiles++
+		
+		// Check if additional file already exists in S3 - REQUIRED for safety
+		if !dryRun {
+			var exists bool
+			err := utils.RetryWithBackoff(ctx, func() error {
+				var checkErr error
+				exists, checkErr = utils.CheckObjectExists(ctx, s.cfg, bucket, s3Key)
+				return checkErr
+			}, fmt.Sprintf("Check existence of %s", s3Key))
+			
+			if err != nil {
+				s.summary.FailedUploads++
+				return fmt.Errorf("❌ Cannot verify object existence for %s: %w. Upload aborted to prevent overwriting existing data", s3Key, err)
+			}
+			if exists {
+				log.Printf("⏭️ Skipping additional file: %s (already exists in S3)", filepath.Base(inputFile))
+				s.summary.SkippedFiles++
+				continue
+			}
+		}
+		
+		s.summary.TotalBytes += size
 		if dryRun {
 			log.Printf("⬆️  [DRY-RUN] Would upload additional file: %s to s3://%s/%s", filepath.Base(inputFile), bucket, s3Key)
 			s.summary.SuccessfulUploads++
 		} else {
 			log.Printf("⬆️ Uploading additional file: %s", filepath.Base(inputFile))
-			if err := utils.UploadFile(ctx, s.cfg, file, bucket, s3Key, types.StorageClassStandard); err != nil {
+			
+			// Retry upload with exponential backoff for network errors
+			err := utils.RetryWithBackoff(ctx, func() error {
+				return utils.UploadFile(ctx, s.cfg, file, bucket, s3Key, types.StorageClassStandard)
+			}, fmt.Sprintf("Upload additional file %s", filepath.Base(inputFile)))
+			
+			if err != nil {
 				s.summary.FailedUploads++
 				return fmt.Errorf("❌ failed to upload additional file %s: %w", filepath.Base(inputFile), err)
 			}
@@ -265,10 +346,12 @@ func (s *BackupService) validateBuckets(ctx context.Context, tasks []config.Task
 	}
 
 	for bucket := range buckets {
-		region, err := utils.ValidateBucketExistsWithRegion(ctx, s.cfg, bucket)
+		region, updatedCfg, err := utils.ValidateBucketExistsWithRegion(ctx, s.cfg, bucket)
 		if err != nil {
 			return fmt.Errorf("❌ S3 bucket '%s' does not exist or is not accessible: %w", bucket, err)
 		}
+		// Update service config with correct region
+		s.cfg = updatedCfg
 		regionInfo := utils.GetRegionInfo(region)
 		gdprStatus := "⚠️  Non-GDPR"
 		if regionInfo.GDPRCompliant {
@@ -284,7 +367,7 @@ func (s *BackupService) createSanitizedInputFile(inputFile string, tasks []confi
 	sanitizedTasks := make([]config.Task, len(tasks))
 	for i, task := range tasks {
 		sanitizedTasks[i] = task
-		sanitizedTasks[i].EncryptionSecret = "********" // Remove encryption secret
+		sanitizedTasks[i].EncryptionSecret = "" // Remove encryption secret
 	}
 
 	// Create temporary file
@@ -318,6 +401,10 @@ func (s *BackupService) printSummary(dryRun bool) {
 		}
 	}
 
+	if s.summary.SkippedFiles > 0 {
+		fmt.Printf("⏭️ Skipped (already exists): %d\n", s.summary.SkippedFiles)
+	}
+
 	if s.summary.FailedUploads > 0 {
 		fmt.Printf("❌ Failed uploads: %d\n", s.summary.FailedUploads)
 	}
@@ -327,6 +414,14 @@ func (s *BackupService) printSummary(dryRun bool) {
 	}
 
 	fmt.Printf("📁 Total files processed: %d\n", s.summary.TotalFiles)
+	fmt.Printf("💾 Total data processed: %s\n", utils.FormatBytes(s.summary.TotalBytes))
+	fmt.Printf("⏱️  Preparation time: %v\n", s.summary.PreparationTime.Round(time.Millisecond))
+	if dryRun {
+		fmt.Printf("⏱️  Upload time (simulated): %v\n", s.summary.UploadTime.Round(time.Millisecond))
+	} else {
+		fmt.Printf("⏱️  Upload time: %v\n", s.summary.UploadTime.Round(time.Millisecond))
+	}
+	fmt.Printf("⏱️  Total time: %v\n", s.summary.TotalTime.Round(time.Millisecond))
 
 	if s.summary.FailedUploads == 0 {
 		if dryRun {

@@ -31,6 +31,13 @@ cd src/
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out -o coverage.html
 ```
+ * 🔍 Run specific test categories:
+```
+cd src/
+go test ./tests/          # Unit tests
+go test ./utils/          # Utility tests
+go test ./config/         # Configuration tests
+```
 
 ## ▶️ How to execute it directly (without building the binary in advance or using the pre-compiled)
  * 📦 [Install Go](https://go.dev/doc/install)
@@ -42,7 +49,11 @@ go run . -help
  * 📋 Test with dry-run:
 ```
 cd src/
+# Test backup dry-run
 go run . -json ../example-input.json -dryrun
+
+# Test restore dry-run (using local directory)
+go run . -mode restore -bucket /path/to/local/backup -destination /tmp/restore -dryrun
 ```
 
 **[Back](../README.md)**
