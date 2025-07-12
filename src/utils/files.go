@@ -6,25 +6,47 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 )
 
 // File splitting constants
 const (
-	BytesPerMB     = 1024 * 1024
-	PartNumFormat  = "%s-part%05d"
-	PartNumDigits  = 5
+	BytesPerMB      = 1024 * 1024
+	PartNumFormat   = "%s-part%05d"
+	PartNumDigits   = 5
 	DefaultFilePerm = 0644
 	DefaultDirPerm  = 0755
 )
 
+// OpenFile in OS default editor
+func OpenFile(filePath string) error {
+	var cmd *exec.Cmd
+
+	// Determine the operating system
+	switch runtime.GOOS {
+	case "darwin": // macOS
+		cmd = exec.Command("open", filePath)
+	case "linux":
+		cmd = exec.Command("xdg-open", filePath)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", filePath)
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+
+	// Run the command
+	return cmd.Start()
+}
+
 // SplitFile splits a file into smaller chunks if it exceeds the specified size
 func SplitFile(filePath string, chunkSizeMB int64) ([]string, error) {
 	log.Printf("🔍 Checking if file needs splitting: %s", filepath.Base(filePath))
-	
+
 	fileInfo, err := getFileInfo(filePath)
 	if err != nil {
 		return nil, err
@@ -32,7 +54,7 @@ func SplitFile(filePath string, chunkSizeMB int64) ([]string, error) {
 
 	chunkSize := chunkSizeMB * BytesPerMB
 	if !needsSplitting(fileInfo.Size(), chunkSize) {
-		log.Printf("✅ File does not need splitting: %s (%s)", 
+		log.Printf("✅ File does not need splitting: %s (%s)",
 			filepath.Base(filePath), FormatBytes(fileInfo.Size()))
 		return []string{filePath}, nil
 	}
@@ -43,7 +65,7 @@ func SplitFile(filePath string, chunkSizeMB int64) ([]string, error) {
 // CombineFiles combines split files back together
 func CombineFiles(downloadDir string) error {
 	log.Printf("🔍 Scanning for split files to combine in: %s", downloadDir)
-	
+
 	splitGroups, err := findSplitFileGroups(downloadDir)
 	if err != nil {
 		return err
@@ -69,7 +91,7 @@ func GetFileChecksum(filePath string) (string, error) {
 	if _, err := io.Copy(hash, file); err != nil {
 		return "", fmt.Errorf("failed to calculate checksum: %w", err)
 	}
-	
+
 	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
@@ -88,13 +110,13 @@ func FormatBytes(bytes int64) string {
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)
 	}
-	
+
 	div, exp := int64(unit), 0
 	for n := bytes / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	
+
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
@@ -111,7 +133,7 @@ func getFileInfo(filePath string) (os.FileInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
-	
+
 	return info, nil
 }
 
@@ -123,7 +145,7 @@ func needsSplitting(fileSize, chunkSize int64) bool {
 // performFileSplit splits file into chunks
 func performFileSplit(filePath string, fileSize, chunkSize int64) ([]string, error) {
 	numParts := calculateNumParts(fileSize, chunkSize)
-	log.Printf("✂️ Splitting into %d MB chunks: %s (%s) -> %d parts", 
+	log.Printf("✂️ Splitting into %d MB chunks: %s (%s) -> %d parts",
 		chunkSize/BytesPerMB, filepath.Base(filePath), FormatBytes(fileSize), numParts)
 
 	file, err := os.Open(filePath)
@@ -150,7 +172,7 @@ func calculateNumParts(fileSize, chunkSize int64) int64 {
 func createFileParts(file *os.File, filePath string, chunkSize int64, numParts int64) ([]string, error) {
 	var parts []string
 	buffer := make([]byte, chunkSize)
-	
+
 	for partNum := 1; int64(partNum) <= numParts; partNum++ {
 		n, err := file.Read(buffer)
 		if err == io.EOF {
@@ -162,14 +184,14 @@ func createFileParts(file *os.File, filePath string, chunkSize int64, numParts i
 
 		partPath := fmt.Sprintf(PartNumFormat, filePath, partNum)
 		log.Printf("📦 Creating part %d/%d: %s", partNum, numParts, filepath.Base(partPath))
-		
+
 		if err := os.WriteFile(partPath, buffer[:n], DefaultFilePerm); err != nil {
 			return nil, fmt.Errorf("failed to write part file: %w", err)
 		}
-		
+
 		parts = append(parts, partPath)
 	}
-	
+
 	return parts, nil
 }
 
@@ -183,27 +205,27 @@ func findSplitFileGroups(downloadDir string) (map[string][]string, error) {
 		if err != nil || info.IsDir() {
 			return err
 		}
-		
+
 		return processPotentialSplitFile(path, info, downloadDir, partPattern, splitGroups)
 	})
-	
+
 	return splitGroups, err
 }
 
 // processPotentialSplitFile processes a file that might be a split part
-func processPotentialSplitFile(path string, info os.FileInfo, downloadDir string, 
+func processPotentialSplitFile(path string, info os.FileInfo, downloadDir string,
 	partPattern *regexp.Regexp, splitGroups map[string][]string) error {
-	
+
 	filename := info.Name()
 	matches := partPattern.FindStringSubmatch(filename)
-	
+
 	if len(matches) == 3 {
 		baseName := matches[1]
 		key := buildSplitGroupKey(path, downloadDir, baseName)
 		log.Printf("🔍 Found split file: %s (group: %s)", filename, key)
 		splitGroups[key] = append(splitGroups[key], path)
 	}
-	
+
 	return nil
 }
 
@@ -231,18 +253,18 @@ func combineSplitGroups(splitGroups map[string][]string, downloadDir string) err
 // combineSingleGroup combines parts of a single split file
 func combineSingleGroup(baseName string, parts []string, downloadDir string) error {
 	totalSize := calculateTotalSize(parts)
-	log.Printf("🔗 Combining %d parts: %s (%s) -> 1 file", 
+	log.Printf("🔗 Combining %d parts: %s (%s) -> 1 file",
 		len(parts), filepath.Base(baseName), FormatBytes(totalSize))
 
 	sortPartsByNumber(parts)
-	
+
 	if err := combineFileParts(parts, baseName, downloadDir); err != nil {
 		return err
 	}
 
 	cleanupAfterCombine(baseName, downloadDir)
 	log.Printf("✅ Successfully combined: %s (%s)", filepath.Base(baseName), FormatBytes(totalSize))
-	
+
 	return nil
 }
 
@@ -278,7 +300,7 @@ func extractPartNumber(filename string) int {
 // combineFileParts combines parts into single file
 func combineFileParts(parts []string, baseName, downloadDir string) error {
 	outputPath := filepath.Join(downloadDir, baseName)
-	
+
 	if err := os.MkdirAll(filepath.Dir(outputPath), DefaultDirPerm); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
@@ -296,11 +318,11 @@ func combineFileParts(parts []string, baseName, downloadDir string) error {
 func copyAndCleanupParts(parts []string, output *os.File) error {
 	for i, partPath := range parts {
 		log.Printf("🔗 Processing part %d/%d: %s", i+1, len(parts), filepath.Base(partPath))
-		
+
 		if err := copyPartToOutput(partPath, output); err != nil {
 			return err
 		}
-		
+
 		if err := os.Remove(partPath); err != nil {
 			log.Printf("⚠️ Warning: Could not remove part file %s: %v", partPath, err)
 		}
@@ -319,7 +341,7 @@ func copyPartToOutput(partPath string, output *os.File) error {
 	if _, err := io.Copy(output, part); err != nil {
 		return fmt.Errorf("failed to copy part data: %w", err)
 	}
-	
+
 	return nil
 }
 
