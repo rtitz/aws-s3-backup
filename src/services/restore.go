@@ -113,7 +113,7 @@ func (s *RestoreService) ProcessRestore(ctx context.Context, bucket, prefix, inp
 		if err := s.handleGlacierRestore(ctx, bucket, filteredObjects, retrievalMode, restoreExpiresAfterDays, restoreWithoutConfirmation); err != nil {
 			return fmt.Errorf("❌ Glacier restore failed: %w", err)
 		}
-		
+
 		// Auto-retry logic if specified
 		if autoRetryDownloadMinutes > 0 {
 			if err := s.waitForGlacierRestore(ctx, bucket, filteredObjects, int(autoRetryDownloadMinutes)); err != nil {
@@ -239,7 +239,7 @@ func (s *RestoreService) listObjects(ctx context.Context, bucket, prefix string)
 	s.cfg = regionCfg
 
 	client := s3.NewFromConfig(regionCfg)
-	log.Printf("📁 Listing objects in bucket: %s (region: %s)", bucket, region)
+	fmt.Printf("📁 Listing objects in bucket: %s (region: %s)\n", bucket, region)
 
 	input := &s3.ListObjectsV2Input{
 		Bucket: &bucket,
@@ -263,19 +263,41 @@ func (s *RestoreService) listObjects(ctx context.Context, bucket, prefix string)
 	}
 
 	// Save to file for future use
-	if err := s.saveObjectsToFile(objects, "generated-restore-input.json"); err != nil {
+	generatedRestoreInputFile := "generated-restore-input.json"
+	if err := s.saveObjectsToFile(objects, generatedRestoreInputFile); err != nil {
 		return nil, fmt.Errorf("❌ failed to save restore input file: %w", err)
 	}
 
-	fmt.Printf("\nGenerated: 'generated-restore-input.json'\n\n")
+	// List the objects
+	if len(objects) > 0 {
+		for _, obj := range objects {
+			fmt.Printf("☁️ Found: %s (%s)\n", obj.Key, utils.FormatBytes(obj.Size))
+		}
+	} else {
+		fmt.Printf("⚠️  No objects found in %s\n", bucket)
+		err := os.Remove(generatedRestoreInputFile)
+		if err != nil {
+			// Handle the error if the file could not be deleted
+			fmt.Printf("Error deleting %s file: %v\n", generatedRestoreInputFile, err)
+		}
+		return nil, nil
+	}
+
+	fmt.Printf("\nGenerated: '%s'\n\n", generatedRestoreInputFile)
 	fmt.Printf("Do you want to continue with restore, without editing generated input JSON? [y/N]: ")
 
 	var response string
 	fmt.Scanln(&response)
 
 	if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+		// Open the file in the default editor
+		if err := utils.OpenFile(generatedRestoreInputFile); err != nil {
+			fmt.Println("Error opening file:", err)
+		} else {
+			fmt.Println("File opened successfully")
+		}
 		fmt.Printf("Restore cancelled. Edit 'generated-restore-input.json' and run:\n")
-		fmt.Printf("aws-s3-backup -mode restore -bucket %s -json generated-restore-input.json -destination %s\n", bucket, s.downloadLocation)
+		fmt.Printf("aws-s3-backup -mode restore -bucket %s -json %s -destination %s\n", bucket, generatedRestoreInputFile, s.downloadLocation)
 		return nil, nil
 	}
 
@@ -522,17 +544,17 @@ func (s *RestoreService) downloadObject(ctx context.Context, bucket, key, downlo
 		log.Printf("⏭️ Skipping download: %s (already exists locally)", key)
 		return nil
 	}
-	
+
 	log.Printf("⬇️ Downloading: %s (%s)", key, utils.FormatBytes(size))
 
 	// Track actual download time
 	downloadStart := time.Now()
-	
+
 	// Retry download with exponential backoff for network errors
 	err := utils.RetryWithBackoff(ctx, func() error {
 		return utils.DownloadFile(ctx, s.cfg, bucket, key, localPath)
 	}, fmt.Sprintf("Download %s", key))
-	
+
 	if err != nil {
 		return err
 	}
@@ -662,7 +684,7 @@ func (s *RestoreService) finalFileExists(key, downloadDir string) bool {
 	howToBuildPattern := regexp.MustCompile(`^(.+)-HowToBuild\.txt(\.enc)?$`)
 	if matches := howToBuildPattern.FindStringSubmatch(filepath.Base(key)); len(matches) >= 2 {
 		baseName := matches[1]
-		
+
 		// For HowToBuild files of tar.gz archives, check if decompressed version exists
 		if strings.HasSuffix(baseName, ".tar.gz") {
 			decompressedName := strings.TrimSuffix(baseName, ".tar.gz")
@@ -671,19 +693,19 @@ func (s *RestoreService) finalFileExists(key, downloadDir string) bool {
 				return true
 			}
 		}
-		
+
 		// Check if combined file exists
 		combinedPath := filepath.Join(downloadDir, filepath.Dir(key), baseName)
 		if _, err := os.Stat(combinedPath); err == nil {
 			return true
 		}
 	}
-	
+
 	// Check for split parts (e.g., file-part00001, file.tar.gz-part00001)
 	partPattern := regexp.MustCompile(`^(.+)-part\d{5}(\.enc)?$`)
 	if matches := partPattern.FindStringSubmatch(filepath.Base(key)); len(matches) >= 2 {
 		baseName := matches[1]
-		
+
 		// For split tar.gz files, check if decompressed version exists
 		if strings.HasSuffix(baseName, ".tar.gz") {
 			decompressedName := strings.TrimSuffix(baseName, ".tar.gz")
@@ -692,14 +714,14 @@ func (s *RestoreService) finalFileExists(key, downloadDir string) bool {
 				return true
 			}
 		}
-		
+
 		// For other split files, check if combined file exists
 		combinedPath := filepath.Join(downloadDir, filepath.Dir(key), baseName)
 		if _, err := os.Stat(combinedPath); err == nil {
 			return true
 		}
 	}
-	
+
 	// For tar.gz files, check if decompressed version exists
 	if strings.HasSuffix(key, ".tar.gz") {
 		baseName := strings.TrimSuffix(filepath.Base(key), ".tar.gz")
@@ -714,7 +736,7 @@ func (s *RestoreService) finalFileExists(key, downloadDir string) bool {
 			return false
 		}
 	}
-	
+
 	// For encrypted tar.gz files, check if decompressed version exists
 	if strings.HasSuffix(key, ".tar.gz.enc") {
 		baseName := strings.TrimSuffix(filepath.Base(key), ".tar.gz.enc")
@@ -723,36 +745,37 @@ func (s *RestoreService) finalFileExists(key, downloadDir string) bool {
 			return true
 		}
 	}
-	
+
 	// For regular files, check if the file itself exists
 	localPath := filepath.Join(downloadDir, key)
 	if _, err := os.Stat(localPath); err == nil {
 		return true
 	}
-	
+
 	return false
 }
+
 // handleGlacierRestore handles restore requests for Glacier objects
 func (s *RestoreService) handleGlacierRestore(ctx context.Context, bucket string, objects []S3Object, retrievalMode string, restoreExpiresAfterDays int32, restoreWithoutConfirmation bool) error {
 	var glacierObjects []S3Object
-	
+
 	// Find objects that need restore
 	for _, obj := range objects {
 		if s.isGlacierStorageClass(obj.StorageClass) {
 			glacierObjects = append(glacierObjects, obj)
 		}
 	}
-	
+
 	if len(glacierObjects) == 0 {
 		return nil // No Glacier objects
 	}
-	
+
 	log.Printf("🧊 Found %d objects in Glacier storage classes that may need restore", len(glacierObjects))
-	
+
 	// Check restore status for each object
 	var needsRestore []S3Object
 	var available []S3Object
-	
+
 	for _, obj := range glacierObjects {
 		restored, err := utils.CheckObjectRestoreStatus(ctx, s.cfg, bucket, obj.Key)
 		if err != nil {
@@ -760,43 +783,43 @@ func (s *RestoreService) handleGlacierRestore(ctx context.Context, bucket string
 			needsRestore = append(needsRestore, obj)
 			continue
 		}
-		
+
 		if restored {
 			available = append(available, obj)
 		} else {
 			needsRestore = append(needsRestore, obj)
 		}
 	}
-	
+
 	if len(available) > 0 {
 		log.Printf("✅ %d objects already restored and available", len(available))
 	}
-	
+
 	if len(needsRestore) == 0 {
 		return nil // All objects are already restored
 	}
-	
+
 	log.Printf("🔄 %d objects need to be restored from Glacier", len(needsRestore))
-	
+
 	// Show objects that need restore
 	for _, obj := range needsRestore {
 		log.Printf("  - %s (%s, %s)", obj.Key, obj.StorageClass, utils.FormatBytes(obj.Size))
 	}
-	
+
 	// Ask for confirmation unless restoreWithoutConfirmation is set
 	if !restoreWithoutConfirmation {
 		fmt.Printf("\nDo you want to restore these %d objects from Glacier storage? [y/N]: ", len(needsRestore))
 		var response string
 		fmt.Scanln(&response)
-		
+
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
 			return fmt.Errorf("restore cancelled by user")
 		}
 	}
-	
+
 	// Initiate restore for objects that need it
 	log.Printf("🔄 Initiating restore for %d objects (mode: %s, expires after: %d days)", len(needsRestore), retrievalMode, restoreExpiresAfterDays)
-	
+
 	for _, obj := range needsRestore {
 		log.Printf("🔄 Restoring: %s", obj.Key)
 		if err := utils.RestoreObject(ctx, s.cfg, bucket, obj.Key, retrievalMode, restoreExpiresAfterDays); err != nil {
@@ -810,7 +833,7 @@ func (s *RestoreService) handleGlacierRestore(ctx context.Context, bucket string
 			log.Printf("✅ Restore initiated for: %s", obj.Key)
 		}
 	}
-	
+
 	// Inform user about wait time
 	switch retrievalMode {
 	case "expedited":
@@ -820,7 +843,7 @@ func (s *RestoreService) handleGlacierRestore(ctx context.Context, bucket string
 	default:
 		log.Printf("⏰ Standard retrieval typically takes 3-5 hours for Glacier, up to 12 hours for Deep Archive")
 	}
-	
+
 	return nil // Don't return error, let the process continue
 }
 
@@ -833,29 +856,30 @@ func (s *RestoreService) isGlacierStorageClass(storageClass string) bool {
 		return false
 	}
 }
+
 // waitForGlacierRestore waits for Glacier objects to be restored with auto-retry
 func (s *RestoreService) waitForGlacierRestore(ctx context.Context, bucket string, objects []S3Object, retryMinutes int) error {
 	var glacierObjects []S3Object
-	
+
 	// Find Glacier objects that need checking
 	for _, obj := range objects {
 		if s.isGlacierStorageClass(obj.StorageClass) {
 			glacierObjects = append(glacierObjects, obj)
 		}
 	}
-	
+
 	if len(glacierObjects) == 0 {
 		return nil
 	}
-	
+
 	log.Printf("🔄 Auto-retry enabled: checking restore status every %d minutes", retryMinutes)
-	
+
 	retryInterval := time.Duration(retryMinutes) * time.Minute
 	startTime := time.Now()
-	
+
 	for {
 		var stillWaiting []S3Object
-		
+
 		// Check status of all Glacier objects
 		for _, obj := range glacierObjects {
 			restored, err := utils.CheckObjectRestoreStatus(ctx, s.cfg, bucket, obj.Key)
@@ -864,29 +888,29 @@ func (s *RestoreService) waitForGlacierRestore(ctx context.Context, bucket strin
 				stillWaiting = append(stillWaiting, obj)
 				continue
 			}
-			
+
 			if !restored {
 				stillWaiting = append(stillWaiting, obj)
 			} else {
 				log.Printf("✅ Object restored and available: %s", obj.Key)
 			}
 		}
-		
+
 		// If all objects are restored, break the loop
 		if len(stillWaiting) == 0 {
 			log.Printf("🎉 All Glacier objects are now restored and available for download")
 			s.summary.RestoreWaitTime = time.Since(startTime)
 			return nil
 		}
-		
+
 		// Show progress
 		restored := len(glacierObjects) - len(stillWaiting)
 		log.Printf("📊 Restore progress: %d/%d objects ready (%d still waiting)", restored, len(glacierObjects), len(stillWaiting))
-		
+
 		// Wait before next check
 		log.Printf("⏰ Waiting %d minutes before next check...", retryMinutes)
 		time.Sleep(retryInterval)
-		
+
 		// Update the list for next iteration
 		glacierObjects = stillWaiting
 	}
