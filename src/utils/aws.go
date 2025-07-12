@@ -70,11 +70,11 @@ func UploadFile(ctx context.Context, cfg aws.Config, filePath, bucket, key strin
 		Body:         file,
 		StorageClass: storageClass,
 	})
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to upload file to S3: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -115,7 +115,19 @@ func getS3Object(ctx context.Context, cfg aws.Config, bucket, key string) (*s3.G
 
 // saveObjectToFile saves S3 object body to local file
 func saveObjectToFile(body io.ReadCloser, filePath string) error {
-	file, err := os.Create(filePath)
+	incompleteSuffix := "_INCOMPL"
+	tmpFilePath := filePath + incompleteSuffix
+
+	// Check if tmpFilePath exists (incomplete previous download)
+	if _, err := os.Stat(tmpFilePath); err == nil {
+		// File exists, proceed to remove it
+		err := os.Remove(tmpFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to remove existing incomplete download: %w", err)
+		}
+	}
+
+	file, err := os.Create(tmpFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to create local file: %w", err)
 	}
@@ -125,7 +137,14 @@ func saveObjectToFile(body io.ReadCloser, filePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to save object to file: %w", err)
 	}
-	
+
+	// Create the new file name by removing the suffix
+	finalFilePath := strings.TrimSuffix(tmpFilePath, incompleteSuffix)
+	// Rename the file
+	errRename := os.Rename(tmpFilePath, finalFilePath)
+	if errRename != nil {
+		return fmt.Errorf("failed to rename file: %w", err)
+	}
 	return nil
 }
 
@@ -184,7 +203,7 @@ func RestoreObject(ctx context.Context, cfg aws.Config, bucket, key string, retr
 	if err != nil {
 		return fmt.Errorf("failed to initiate restore: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -227,7 +246,7 @@ func isObjectRestored(result *s3.HeadObjectOutput) bool {
 	if isGlacierStorageClass(result.StorageClass) {
 		return checkGlacierRestoreStatus(result.Restore)
 	}
-	
+
 	return true // Object is in Standard storage or already restored
 }
 
@@ -238,7 +257,7 @@ func isGlacierStorageClass(storageClass types.StorageClass) bool {
 		types.StorageClassDeepArchive,
 		types.StorageClassGlacierIr,
 	}
-	
+
 	for _, class := range glacierClasses {
 		if storageClass == class {
 			return true
@@ -260,7 +279,7 @@ func checkGlacierRestoreStatus(restore *string) bool {
 	if strings.Contains(restoreStatus, `ongoing-request="false"`) {
 		return true // Restore completed
 	}
-	
+
 	return false
 }
 
@@ -274,7 +293,7 @@ func ValidateBucketExistsWithRegion(ctx context.Context, cfg aws.Config, bucket 
 	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: &bucket,
 	})
-	
+
 	if err != nil {
 		return handleBucketCreation(ctx, cfg, bucket)
 	}
@@ -286,7 +305,7 @@ func ValidateBucketExistsWithRegion(ctx context.Context, cfg aws.Config, bucket 
 // handleBucketCreation manages bucket creation workflow
 func handleBucketCreation(ctx context.Context, cfg aws.Config, bucket string) (string, aws.Config, error) {
 	fmt.Printf("\n❌ S3 bucket '%s' does not exist.\n", bucket)
-	
+
 	if !confirmBucketCreation() {
 		return "", aws.Config{}, fmt.Errorf("bucket '%s' does not exist", bucket)
 	}
@@ -303,10 +322,10 @@ func handleBucketCreation(ctx context.Context, cfg aws.Config, bucket string) (s
 	}
 
 	fmt.Printf("✅ Bucket '%s' created successfully in region %s\n", bucket, selectedRegion)
-	
+
 	updatedCfg := cfg.Copy()
 	updatedCfg.Region = selectedRegion
-	
+
 	return selectedRegion, updatedCfg, nil
 }
 
@@ -321,15 +340,15 @@ func confirmBucketCreation() bool {
 // selectBucketRegion prompts user to select region for new bucket
 func selectBucketRegion() string {
 	showAvailableRegions()
-	
+
 	fmt.Printf("\nEnter region code for bucket creation [%s]: ", config_app.DefaultAWSRegion)
 	var selectedRegion string
 	fmt.Scanln(&selectedRegion)
-	
+
 	if selectedRegion == "" {
 		selectedRegion = config_app.DefaultAWSRegion
 	}
-	
+
 	return selectedRegion
 }
 
@@ -350,14 +369,14 @@ func showAvailableRegions() {
 // handleBucketCreationError provides helpful error messages
 func handleBucketCreationError(bucket string, err error) {
 	fmt.Printf("❌ Bucket creation failed: %v\n", err)
-	
+
 	errorMessages := map[string]string{
 		"BucketAlreadyExists": fmt.Sprintf("💡 The bucket name '%s' is already taken globally. Try a different name.", bucket),
 		"InvalidBucketName":   "💡 Invalid bucket name. Use lowercase letters, numbers, and hyphens only.",
 		"AccessDenied":        "💡 Insufficient permissions. Check your IAM policy includes s3:CreateBucket.",
 		"TooManyBuckets":      "💡 Account bucket limit reached (100 buckets max). Delete unused buckets.",
 	}
-	
+
 	for errorType, message := range errorMessages {
 		if strings.Contains(err.Error(), errorType) {
 			fmt.Printf("%s\n", message)
@@ -420,7 +439,7 @@ func createS3Bucket(ctx context.Context, client *s3.Client, bucketName, region s
 	if err != nil {
 		return fmt.Errorf("failed to create bucket: %w", err)
 	}
-	
+
 	fmt.Printf("✅ Bucket created successfully\n")
 	return nil
 }
@@ -430,19 +449,19 @@ func configureBucketSecurity(ctx context.Context, client *s3.Client, bucketName 
 	if err := enableBucketVersioning(ctx, client, bucketName); err != nil {
 		return err
 	}
-	
+
 	if err := blockPublicAccess(ctx, client, bucketName); err != nil {
 		return err
 	}
-	
+
 	if err := enableBucketEncryption(ctx, client, bucketName); err != nil {
 		return err
 	}
-	
+
 	if err := configureBucketLifecycle(ctx, client, bucketName); err != nil {
 		return err
 	}
-	
+
 	fmt.Printf("🎉 Bucket configuration completed successfully!\n")
 	return nil
 }

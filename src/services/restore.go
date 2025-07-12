@@ -125,7 +125,11 @@ func (s *RestoreService) ProcessRestore(ctx context.Context, bucket, prefix, inp
 	for _, obj := range filteredObjects {
 		s.summary.TotalFiles++
 		if dryRun {
-			log.Printf("⬇️ [DRY-RUN] Would download: %s (%s)", obj.Key, utils.FormatBytes(obj.Size))
+			log.Printf("⬇️ [DRY-RUN] Would download (copy instead): %s (%s)", obj.Key, utils.FormatBytes(obj.Size))
+			// Copy from bucket path to destination
+			if err := utils.CopyFile(filepath.Join(bucket+"/"+obj.Key), filepath.Join(downloadLocation+"/"+obj.Key)); err != nil {
+				return fmt.Errorf("❌ Failed to copy file: %w", err)
+			}
 			s.summary.SuccessfulDownloads++
 			s.summary.TotalBytes += obj.Size
 		} else {
@@ -643,7 +647,7 @@ func (s *RestoreService) decompressArchives(downloadDir string) error {
 			log.Printf("📎 Decompressing: %s", info.Name())
 
 			// Extract to same directory
-			if err := utils.ExtractArchive(path, filepath.Dir(path)); err != nil {
+			if err := utils.ExtractArchive(path, decompressedPath); err != nil {
 				log.Printf("❌ Failed to decompress %s: %v", info.Name(), err)
 				return nil // Continue with other files
 			}
