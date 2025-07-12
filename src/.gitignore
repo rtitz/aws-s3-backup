@@ -3,7 +3,8 @@ coverage.out
 coverage.html
 
 # Generated restore input files
-generated-restore-input*.json
+generated-restore-input*json
+bin/generated-restore-input*json
 
 # Temporary files
 *.tmp
