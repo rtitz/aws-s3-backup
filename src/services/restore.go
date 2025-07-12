@@ -271,7 +271,7 @@ func (s *RestoreService) listObjects(ctx context.Context, bucket, prefix string)
 	// List the objects
 	if len(objects) > 0 {
 		for _, obj := range objects {
-			fmt.Printf("☁️ Found: %s (%s) StorageClass: %s\n", obj.Key, utils.FormatBytes(obj.Size), string(obj.StorageClass))
+			fmt.Printf("☁️  Found: %s (%s) StorageClass: %s\n", obj.Key, utils.FormatBytes(obj.Size), string(obj.StorageClass))
 		}
 	} else {
 		fmt.Printf("⚠️  No objects found in %s\n", bucket)
