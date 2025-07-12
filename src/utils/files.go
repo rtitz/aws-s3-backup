@@ -120,6 +120,54 @@ func FormatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
+// Used for Dry-Run only: CopyFile copies a file using Go's built-in io.Copy function while preserving timestamps and permissions
+func CopyFile(src, dst string) error {
+	// Get source file info for preserving attributes
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	fin, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer fin.Close()
+
+	// Create dst directory if needed
+	dirPath := filepath.Dir(dst)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return err
+	}
+
+	fout, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer fout.Close()
+
+	// Copy file content
+	_, err = io.Copy(fout, fin)
+	if err != nil {
+		return err
+	}
+
+	// Preserve file permissions
+	if err := fout.Chmod(srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	// Close output file before setting timestamps
+	fout.Close()
+
+	// Preserve timestamps (access and modification time)
+	if err := os.Chtimes(dst, srcInfo.ModTime(), srcInfo.ModTime()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Helper functions for file splitting
 // getFileInfo gets file information for splitting
 func getFileInfo(filePath string) (os.FileInfo, error) {
