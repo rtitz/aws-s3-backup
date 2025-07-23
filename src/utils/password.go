@@ -42,7 +42,7 @@ func ValidateEncryptionPassword(password string) error {
 // checkExamplePassword prevents using the documentation example password
 func checkExamplePassword(password string) error {
 	if password == ExamplePassword {
-		return fmt.Errorf("❌ The example password '%s' is not allowed for security reasons.\n\n🔒 Please create your own unique password following the requirements.", ExamplePassword)
+		return fmt.Errorf("❌ The example password '%s' is not allowed for security reasons.\n\n🔒 Please create your own unique password following the requirements", ExamplePassword)
 	}
 	return nil
 }

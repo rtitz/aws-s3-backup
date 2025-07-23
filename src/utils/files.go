@@ -72,7 +72,7 @@ func CombineFiles(downloadDir string) error {
 	}
 
 	if len(splitGroups) == 0 {
-		log.Printf("ℹ️ No split files found to combine")
+		log.Printf("ℹ️  No split files found to combine")
 		return nil
 	}
 
@@ -193,7 +193,7 @@ func needsSplitting(fileSize, chunkSize int64) bool {
 // performFileSplit splits file into chunks
 func performFileSplit(filePath string, fileSize, chunkSize int64) ([]string, error) {
 	numParts := calculateNumParts(fileSize, chunkSize)
-	log.Printf("✂️ Splitting into %d MB chunks: %s (%s) -> %d parts",
+	log.Printf("✂️  Splitting into %d MB chunks: %s (%s) -> %d parts",
 		chunkSize/BytesPerMB, filepath.Base(filePath), FormatBytes(fileSize), numParts)
 
 	file, err := os.Open(filePath)
@@ -372,7 +372,7 @@ func copyAndCleanupParts(parts []string, output *os.File) error {
 		}
 
 		if err := os.Remove(partPath); err != nil {
-			log.Printf("⚠️ Warning: Could not remove part file %s: %v", partPath, err)
+			log.Printf("⚠️  Warning: Could not remove part file %s: %v", partPath, err)
 		}
 	}
 	return nil
@@ -398,6 +398,6 @@ func cleanupAfterCombine(baseName, downloadDir string) {
 	howToFile := filepath.Join(downloadDir, baseName+"-HowToBuild.txt")
 	if _, err := os.Stat(howToFile); err == nil {
 		os.Remove(howToFile)
-		log.Printf("🗑️ Removed instruction file: %s-HowToBuild.txt", filepath.Base(baseName))
+		log.Printf("🗑️  Removed instruction file: %s-HowToBuild.txt", filepath.Base(baseName))
 	}
 }

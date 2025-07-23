@@ -15,7 +15,7 @@ import (
 // CreateArchive creates a tar.gz archive with multi-core compression
 func CreateArchive(files []string, outputPath string) error {
 	log.Printf("📦 Creating archive: %s", filepath.Base(outputPath))
-	
+
 	out, err := os.Create(outputPath)
 	if err != nil {
 		return err
@@ -25,7 +25,7 @@ func CreateArchive(files []string, outputPath string) error {
 	// Limit to 75% of cores, minimum 1, maximum 8
 	cores := runtime.NumCPU()
 	maxCores := max(1, min(8, cores*3/4))
-	
+
 	gw, err := pgzip.NewWriterLevel(out, pgzip.BestSpeed)
 	if err != nil {
 		return err
@@ -40,7 +40,7 @@ func CreateArchive(files []string, outputPath string) error {
 			return err
 		}
 	}
-	
+
 	log.Printf("✅ Archive created successfully: %s", filepath.Base(outputPath))
 	return nil
 }
@@ -76,7 +76,7 @@ func ExtractArchive(archivePath, destDir string) error {
 		// Convert tar path (always forward slashes) to OS-specific path
 		osPath := filepath.FromSlash(header.Name)
 		target := filepath.Join(destDir, osPath)
-		
+
 		// Ensure the target directory exists
 		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 			return err
@@ -99,11 +99,11 @@ func ExtractArchive(archivePath, destDir string) error {
 				return err
 			}
 			outFile.Close()
-			
+
 			// Preserve file timestamps immediately
 			if err := os.Chtimes(target, header.AccessTime, header.ModTime); err != nil {
 				// Don't fail extraction if timestamp setting fails
-				log.Printf("⚠️ Warning: Could not set timestamps for %s: %v", target, err)
+				log.Printf("⚠️  Warning: Could not set timestamps for %s: %v", target, err)
 			}
 		}
 	}
@@ -112,7 +112,7 @@ func ExtractArchive(archivePath, destDir string) error {
 	for dirPath, header := range dirTimestamps {
 		if err := os.Chtimes(dirPath, header.AccessTime, header.ModTime); err != nil {
 			// Don't fail extraction if timestamp setting fails
-			log.Printf("⚠️ Warning: Could not set timestamps for directory %s: %v", dirPath, err)
+			log.Printf("⚠️  Warning: Could not set timestamps for directory %s: %v", dirPath, err)
 		}
 	}
 
@@ -130,7 +130,7 @@ func addToArchive(tw *tar.Writer, filePath string) error {
 		}
 
 		log.Printf("➕ Adding to archive: %s", path)
-		
+
 		file, err := os.Open(path)
 		if err != nil {
 			return err

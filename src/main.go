@@ -72,15 +72,31 @@ func validateAndShowHelp(cfg *config.Config) error {
 
 // executeMode runs the appropriate operation mode (backup or restore)
 func executeMode(ctx context.Context, cfg *config.Config, flags *appFlags) error {
-	// Handle dry-run backup mode (no AWS auth needed)
-	if cfg.Mode == "backup" && cfg.DryRun {
-		return handleDryRunBackup(ctx, cfg)
-	}
 
-	// Get AWS configuration
-	awsCfg, err := getAWSConfig(ctx, cfg)
-	if err != nil {
-		return err
+	// Get AWS authentication configuration
+	var awsCfg aws.Config
+	var err error
+	if !cfg.DryRun { // No dry-run
+		fmt.Printf("🔑 Authenticating with AWS...\n")
+		awsCfg, err = getAWSConfig(ctx, cfg)
+		if err != nil {
+			return err
+		}
+	} else {
+		awsCfg = aws.Config{} // Empty AWS Config as all communication to AWS is skipped
+		switch cfg.Mode {
+		case "backup":
+			log.Println("⚠️  [DRY-RUN] Skipping AWS authentication - no S3 operations will be performed")
+			log.Println("⚠️  [DRY-RUN] No bucket validation or AWS connectivity checks performed")
+			log.Println("⚠️  [DRY-RUN] Ensure bucket exists and credentials work before real backup")
+		case "restore":
+			log.Println("⚠️  [DRY-RUN] Skipping AWS authentication - using local directory as bucket")
+		default:
+			return fmt.Errorf("❌ invalid mode: %s", cfg.Mode)
+		}
+		fmt.Printf("\nPress 'ENTER' to confirm Dry-Run: ")
+		var confirm string
+		fmt.Scanln(&confirm)
 	}
 
 	// Execute the appropriate mode
@@ -92,15 +108,6 @@ func executeMode(ctx context.Context, cfg *config.Config, flags *appFlags) error
 	default:
 		return fmt.Errorf("❌ invalid mode: %s", cfg.Mode)
 	}
-}
-
-// handleDryRunBackup executes backup in dry-run mode without AWS operations
-func handleDryRunBackup(ctx context.Context, cfg *config.Config) error {
-	log.Println("⚠️  [DRY-RUN] Skipping AWS authentication - no S3 operations will be performed")
-	log.Println("⚠️  [DRY-RUN] No bucket validation or AWS connectivity checks performed")
-	log.Println("⚠️  [DRY-RUN] Ensure bucket exists and credentials work before real backup")
-	backupService := services.NewBackupService(aws.Config{})
-	return backupService.ProcessBackup(ctx, cfg.InputFile, cfg.DryRun)
 }
 
 // getAWSConfig creates and validates AWS configuration
@@ -144,17 +151,9 @@ func executeBackup(ctx context.Context, awsCfg aws.Config, cfg *config.Config) e
 
 // executeRestore runs the restore operation
 func executeRestore(ctx context.Context, awsCfg aws.Config, cfg *config.Config, flags *appFlags) error {
-	if cfg.DryRun {
-		log.Println("⚠️  [DRY-RUN] Skipping AWS authentication - using local directory as bucket")
-		restoreService := services.NewRestoreService(aws.Config{})
-		return restoreService.ProcessRestore(ctx, cfg.Bucket, cfg.Prefix, cfg.InputFile, 
-			cfg.DownloadLocation, cfg.DryRun, flags.skipDecompression, cfg.RetrievalMode, 
-			int32(cfg.RestoreExpiresAfterDays), int(cfg.AutoRetryDownloadMinutes), cfg.RestoreWithoutConfirmation)
-	}
-	
 	restoreService := services.NewRestoreService(awsCfg)
-	return restoreService.ProcessRestore(ctx, cfg.Bucket, cfg.Prefix, cfg.InputFile, 
-		cfg.DownloadLocation, cfg.DryRun, flags.skipDecompression, cfg.RetrievalMode, 
+	return restoreService.ProcessRestore(ctx, cfg.Bucket, cfg.Prefix, cfg.InputFile,
+		cfg.DownloadLocation, cfg.DryRun, flags.skipDecompression, cfg.RetrievalMode,
 		int32(cfg.RestoreExpiresAfterDays), int(cfg.AutoRetryDownloadMinutes), cfg.RestoreWithoutConfirmation)
 }
 

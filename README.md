@@ -216,6 +216,7 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json genera
   * Useful for testing configurations and measuring local performance
   * No AWS credentials required in dry-run mode
   * Shows what would be uploaded/downloaded with detailed logging
+  * Can also be used to create the files locally and upload them by hand somewhere else or to restore (combine and decrypt) files restored from somewhere else
 
 
 ## 📄 The 'input.json' file for backups
@@ -280,9 +281,10 @@ For more info about the different StorageClasses and AWS S3 pricing in general s
 
 ⚠️ **IMPORTANT ENCRYPTION WARNING:**
   * **If you use encryption, this tool is REQUIRED for restore** - standard tools cannot decrypt the files
-  * **Keep this tool and your password safe** - without them, your data cannot be recovered
+  * **Keep this tool and your password safe** - without them, your data cannot be recovered (newer versions of this tool should always be able to decrypt your data, but still keep the executable in the version you used to encrypt!)
   * **Manual decryption scripts available**: `decrypt_manual.py` and `decrypt_openssl.sh` are provided as backup options if this tool becomes unavailable
   * **Test your encryption setup** before relying on it for important data
+  * **This tool is delivered on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND**
 
 ## 🔐 Authentication via environment variables (instead of AWS CLI)
   * Do not specify the parameter -profile

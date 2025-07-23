@@ -315,7 +315,7 @@ func handleBucketCreation(ctx context.Context, cfg aws.Config, bucket string) (s
 		return "", aws.Config{}, fmt.Errorf("invalid region: %s", selectedRegion)
 	}
 
-	fmt.Printf("\n🏗️ Creating bucket '%s' in region %s...\n", bucket, selectedRegion)
+	fmt.Printf("\n🏗️  Creating bucket '%s' in region %s...\n", bucket, selectedRegion)
 	if err := CreateBucket(ctx, cfg, bucket, selectedRegion); err != nil {
 		handleBucketCreationError(bucket, err)
 		return "", aws.Config{}, fmt.Errorf("bucket creation failed: %w", err)
@@ -371,10 +371,10 @@ func handleBucketCreationError(bucket string, err error) {
 	fmt.Printf("❌ Bucket creation failed: %v\n", err)
 
 	errorMessages := map[string]string{
-		"BucketAlreadyExists": fmt.Sprintf("💡 The bucket name '%s' is already taken globally. Try a different name.", bucket),
-		"InvalidBucketName":   "💡 Invalid bucket name. Use lowercase letters, numbers, and hyphens only.",
-		"AccessDenied":        "💡 Insufficient permissions. Check your IAM policy includes s3:CreateBucket.",
-		"TooManyBuckets":      "💡 Account bucket limit reached (100 buckets max). Delete unused buckets.",
+		"BucketAlreadyExists": fmt.Sprintf("💡  The bucket name '%s' is already taken globally. Try a different name.", bucket),
+		"InvalidBucketName":   "💡  Invalid bucket name. Use lowercase letters, numbers, and hyphens only.",
+		"AccessDenied":        "💡  Insufficient permissions. Check your IAM policy includes s3:CreateBucket.",
+		"TooManyBuckets":      "💡  Account bucket limit reached (100 buckets max). Delete unused buckets.",
 	}
 
 	for errorType, message := range errorMessages {
@@ -462,13 +462,13 @@ func configureBucketSecurity(ctx context.Context, client *s3.Client, bucketName 
 		return err
 	}
 
-	fmt.Printf("🎉 Bucket configuration completed successfully!\n")
+	fmt.Printf("🎉  Bucket configuration completed successfully!\n")
 	return nil
 }
 
 // enableBucketVersioning enables versioning on the bucket
 func enableBucketVersioning(ctx context.Context, client *s3.Client, bucketName string) error {
-	fmt.Printf("🔄 Enabling versioning...\n")
+	fmt.Printf("🔄  Enabling versioning...\n")
 	_, err := client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: &bucketName,
 		VersioningConfiguration: &types.VersioningConfiguration{
@@ -526,7 +526,7 @@ func enableBucketEncryption(ctx context.Context, client *s3.Client, bucketName s
 
 // configureBucketLifecycle sets up lifecycle policy for cleanup
 func configureBucketLifecycle(ctx context.Context, client *s3.Client, bucketName string) error {
-	fmt.Printf("♻️ Configuring lifecycle policy...\n")
+	fmt.Printf("♻️  Configuring lifecycle policy...\n")
 	_, err := client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: &bucketName,
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{

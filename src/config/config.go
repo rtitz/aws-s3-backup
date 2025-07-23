@@ -13,7 +13,7 @@ import (
 // Application constants
 const (
 	AppName    = "AWS-S3-BACKUP"
-	AppVersion = "1.3.8"
+	AppVersion = "1.3.9"
 )
 
 // Default configuration values
@@ -23,7 +23,7 @@ const (
 	DefaultAWSRegion               = "us-east-1"
 	DefaultRetrievalMode           = "bulk"
 	DefaultRestoreExpiresAfterDays = 3
-	DefaultArchiveSplitMB          = 250
+	DefaultArchiveSplitMB          = 256
 	DefaultCleanupTmpStorage       = true
 )
 

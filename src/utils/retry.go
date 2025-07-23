@@ -44,7 +44,7 @@ func RetryWithBackoff(ctx context.Context, operation func() error, operationName
 
 		// Calculate next delay with exponential backoff
 		nextDelay := calculateNextDelay(delay, attempt)
-		
+
 		logRetryAttempt(operationName, attempt, err, nextDelay)
 
 		// Wait with context cancellation support
@@ -95,8 +95,8 @@ func calculateNextDelay(currentDelay time.Duration, attempt int) time.Duration {
 
 // logRetryAttempt logs retry attempt with error and next delay
 func logRetryAttempt(operationName string, attempt int, err error, nextDelay time.Duration) {
-	log.Printf("⚠️ %s failed (attempt %d): %v", operationName, attempt, err)
-	log.Printf("🔄 Retrying in %v... (Press Ctrl+C to cancel, will retry for up to 12 hours)", nextDelay)
+	log.Printf("⚠️  %s failed (attempt %d): %v", operationName, attempt, err)
+	log.Printf("🔄  Retrying in %v... (Press Ctrl+C to cancel, will retry for up to 12 hours)", nextDelay)
 }
 
 // waitWithContext waits for delay duration with context cancellation support

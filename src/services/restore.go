@@ -63,6 +63,7 @@ func (s *RestoreService) ProcessRestore(ctx context.Context, bucket, prefix, inp
 	} else {
 		fmt.Printf("REGION: %s\n\n", s.cfg.Region)
 	}
+	time.Sleep(time.Second * 2)
 
 	if bucket == "" {
 		if dryRun {
@@ -95,7 +96,7 @@ func (s *RestoreService) ProcessRestore(ctx context.Context, bucket, prefix, inp
 	filteredObjects := s.filterObjectsWithDecompressedFiles(objects, downloadLocation)
 	if len(filteredObjects) < len(objects) {
 		skippedCount := len(objects) - len(filteredObjects)
-		log.Printf("⏭️ Skipping %d objects (decompressed files already exist)", skippedCount)
+		log.Printf("⏭️  Skipping %d objects (combined / decompressed file(s) already exist)", skippedCount)
 		s.summary.SkippedFiles += skippedCount
 	}
 
@@ -125,7 +126,7 @@ func (s *RestoreService) ProcessRestore(ctx context.Context, bucket, prefix, inp
 	for _, obj := range filteredObjects {
 		s.summary.TotalFiles++
 		if dryRun {
-			log.Printf("⬇️ [DRY-RUN] Would download (copy instead): %s (%s)", obj.Key, utils.FormatBytes(obj.Size))
+			log.Printf("⬇️  [DRY-RUN] Would download (copy instead): %s (%s)", obj.Key, utils.FormatBytes(obj.Size))
 			// Copy from bucket path to destination
 			if err := utils.CopyFile(filepath.Join(bucket+"/"+obj.Key), filepath.Join(downloadLocation+"/"+obj.Key)); err != nil {
 				return fmt.Errorf("❌ Failed to copy file: %w", err)
@@ -154,25 +155,25 @@ func (s *RestoreService) ProcessRestore(ctx context.Context, bucket, prefix, inp
 			}
 		}
 		if err := s.decryptFiles(downloadLocation, password, objects); err != nil {
-			log.Printf("⚠️ Warning: Some files could not be decrypted: %v", err)
+			log.Printf("⚠️  Warning: Some files could not be decrypted: %v", err)
 			s.summary.Warnings++
 		}
 	}
 
 	// Combine split files (including decrypted ones)
 	if err := utils.CombineFiles(downloadLocation); err != nil {
-		log.Printf("⚠️ Warning: Failed to combine files: %v", err)
+		log.Printf("⚠️  Warning: Failed to combine files: %v", err)
 		s.summary.Warnings++
 	}
 
 	// Decompress tar.gz archives (unless skipped)
 	if !skipDecompression {
 		if err := s.decompressArchives(downloadLocation); err != nil {
-			log.Printf("⚠️ Warning: Failed to decompress archives: %v", err)
+			log.Printf("⚠️  Warning: Failed to decompress archives: %v", err)
 			s.summary.Warnings++
 		}
 	} else {
-		log.Printf("⏭️ Skipping archive decompression (--skipDecompression flag set)")
+		log.Printf("⏭️  Skipping archive decompression (-skipDecompression flag set)")
 	}
 
 	s.summary.ProcessingTime = time.Since(processingStart)
@@ -206,7 +207,7 @@ func (s *RestoreService) listBuckets(ctx context.Context) error {
 		fmt.Printf("  %s (region: %s %s %s %s)\n", *bucket.Name, region, regionInfo.Flag, regionInfo.Country, gdprStatus)
 	}
 
-	fmt.Printf("\n💡 To restore from a bucket, specify it with the -bucket parameter:\n")
+	fmt.Printf("\n💡  To restore from a bucket, specify it with the -bucket parameter:\n")
 	fmt.Printf("   aws-s3-backup -mode restore -bucket BUCKET_NAME -destination /path/to/restore/\n\n")
 	return nil
 }
@@ -320,7 +321,7 @@ func (s *RestoreService) saveObjectsToFile(objects []S3Object, filename string) 
 func (s *RestoreService) printSummary(dryRun bool) {
 	fmt.Printf("%s", "\n"+strings.Repeat("=", 50)+"\n")
 	if dryRun {
-		fmt.Printf("📋 RESTORE SUMMARY (DRY-RUN)\n")
+		fmt.Printf("📋  RESTORE SUMMARY (DRY-RUN)\n")
 	} else {
 		fmt.Printf("📊 RESTORE SUMMARY\n")
 	}
@@ -335,7 +336,7 @@ func (s *RestoreService) printSummary(dryRun bool) {
 	}
 
 	if s.summary.SkippedFiles > 0 {
-		fmt.Printf("⏭️ Skipped (already exists): %d\n", s.summary.SkippedFiles)
+		fmt.Printf("⏭️  Skipped (already exists): %d\n", s.summary.SkippedFiles)
 	}
 
 	if s.summary.FailedDownloads > 0 {
@@ -367,9 +368,9 @@ func (s *RestoreService) printSummary(dryRun bool) {
 
 	if s.summary.FailedDownloads == 0 {
 		if dryRun {
-			fmt.Printf("\n🎉 Dry-run restore completed successfully!\n")
+			fmt.Printf("\n🎉  Dry-run restore completed successfully!\n")
 		} else {
-			fmt.Printf("\n🎉 Restore completed successfully!\n")
+			fmt.Printf("\n🎉  Restore completed successfully!\n")
 		}
 	} else {
 		fmt.Printf("\n⚠️  Restore completed with errors!\n")
@@ -419,7 +420,7 @@ func (s *RestoreService) decryptFiles(downloadDir, password string, objects []S3
 			decryptedKey := strings.TrimSuffix(obj.Key, "."+config.EncryptionExt)
 			decryptedPath := filepath.Join(downloadDir, decryptedKey)
 			if _, err := os.Stat(decryptedPath); err == nil {
-				log.Printf("⏭️ Skipping decryption of %s (decrypted version already exists: %s)", obj.Key, decryptedKey)
+				log.Printf("⏭️  Skipping decryption of %s (decrypted version already exists: %s)", obj.Key, decryptedKey)
 				continue
 			}
 			encryptedFiles = append(encryptedFiles, obj)
@@ -427,7 +428,7 @@ func (s *RestoreService) decryptFiles(downloadDir, password string, objects []S3
 	}
 
 	if len(encryptedFiles) == 0 {
-		log.Printf("ℹ️ No encrypted files found in objects list")
+		log.Printf("ℹ️  No encrypted files found in objects list")
 		return nil
 	}
 
@@ -443,13 +444,13 @@ func (s *RestoreService) decryptFiles(downloadDir, password string, objects []S3
 
 		// Skip if decrypted version already exists
 		if _, err := os.Stat(decryptedPath); err == nil {
-			log.Printf("⏭️ Skipping decryption of %s (decrypted file already exists: %s)", obj.Key, decryptedName)
+			log.Printf("⏭️  Skipping decryption of %s (decrypted file already exists: %s)", obj.Key, decryptedName)
 			continue
 		}
 
 		// Check if encrypted file exists locally
 		if _, err := os.Stat(localPath); os.IsNotExist(err) {
-			log.Printf("⚠️ Encrypted file not found locally: %s", obj.Key)
+			log.Printf("⚠️  Encrypted file not found locally: %s", obj.Key)
 			continue
 		}
 
@@ -460,7 +461,7 @@ func (s *RestoreService) decryptFiles(downloadDir, password string, objects []S3
 			if err == nil {
 				// Decryption successful, remove encrypted file
 				if err := os.Remove(localPath); err != nil {
-					log.Printf("⚠️ Warning: Could not remove encrypted file %s: %v", obj.Key, err)
+					log.Printf("⚠️  Warning: Could not remove encrypted file %s: %v", obj.Key, err)
 				}
 				log.Printf("✅ Successfully decrypted: %s", decryptedName)
 				break
@@ -473,12 +474,12 @@ func (s *RestoreService) decryptFiles(downloadDir, password string, objects []S3
 			fmt.Scanln(&input)
 
 			if strings.ToLower(input) == "skip" {
-				log.Printf("⏭️ Skipping decryption of: %s", obj.Key)
+				log.Printf(" Skipping decryption of: %s", obj.Key)
 				break
 			}
 
 			if input == "" {
-				log.Printf("⏭️ Skipping decryption of: %s (empty password)", obj.Key)
+				log.Printf("⏭️  Skipping decryption of: %s (empty password)", obj.Key)
 				break
 			}
 
@@ -493,7 +494,7 @@ func (s *RestoreService) downloadObject(ctx context.Context, bucket, key, downlo
 	// Skip if already exists
 	localPath := fmt.Sprintf("%s/%s", strings.TrimRight(downloadDir, "/"), key)
 	if _, err := os.Stat(localPath); err == nil {
-		log.Printf("⏭️ Skipping %s (already exists)", key)
+		log.Printf("⏭️  Skipping %s (already exists)", key)
 		s.summary.SkippedFiles++
 		return nil
 	}
@@ -503,7 +504,7 @@ func (s *RestoreService) downloadObject(ctx context.Context, bucket, key, downlo
 		decryptedKey := strings.TrimSuffix(key, "."+config.EncryptionExt)
 		decryptedPath := fmt.Sprintf("%s/%s", strings.TrimRight(downloadDir, "/"), decryptedKey)
 		if _, err := os.Stat(decryptedPath); err == nil {
-			log.Printf("⏭️ Skipping %s (decrypted version already exists: %s)", key, decryptedKey)
+			log.Printf("⏭️  Skipping %s (decrypted version already exists: %s)", key, decryptedKey)
 			s.summary.SkippedFiles++
 			return nil
 		}
@@ -517,7 +518,7 @@ func (s *RestoreService) downloadObject(ctx context.Context, bucket, key, downlo
 		combinedKey := filepath.Join(filepath.Dir(key), baseName)
 		combinedPath := fmt.Sprintf("%s/%s", strings.TrimRight(downloadDir, "/"), combinedKey)
 		if _, err := os.Stat(combinedPath); err == nil {
-			log.Printf("⏭️ Skipping %s (combined file already exists: %s)", key, baseName)
+			log.Printf("⏭️  Skipping %s (combined file already exists: %s)", key, baseName)
 			s.summary.SkippedFiles++
 			return nil
 		}
@@ -531,7 +532,7 @@ func (s *RestoreService) downloadObject(ctx context.Context, bucket, key, downlo
 		combinedKey := filepath.Join(filepath.Dir(key), baseName)
 		combinedPath := fmt.Sprintf("%s/%s", strings.TrimRight(downloadDir, "/"), combinedKey)
 		if _, err := os.Stat(combinedPath); err == nil {
-			log.Printf("⏭️ Skipping %s (combined file already exists: %s)", key, baseName)
+			log.Printf(" Skipping %s (combined file already exists: %s)", key, baseName)
 			s.summary.SkippedFiles++
 			return nil
 		}
@@ -545,11 +546,11 @@ func (s *RestoreService) downloadObject(ctx context.Context, bucket, key, downlo
 
 	// Check if file already exists locally (skip re-download)
 	if _, err := os.Stat(localPath); err == nil {
-		log.Printf("⏭️ Skipping download: %s (already exists locally)", key)
+		log.Printf("⏭️  Skipping download: %s (already exists locally)", key)
 		return nil
 	}
 
-	log.Printf("⬇️ Downloading: %s (%s)", key, utils.FormatBytes(size))
+	log.Printf("⬇️  Downloading: %s (%s)", key, utils.FormatBytes(size))
 
 	// Track actual download time
 	downloadStart := time.Now()
@@ -624,7 +625,7 @@ func (s *RestoreService) trackActualDownloadTime(duration time.Duration) {
 
 // decompressArchives decompresses tar.gz files in the download directory
 func (s *RestoreService) decompressArchives(downloadDir string) error {
-	log.Printf("📎 Scanning for archives to decompress...")
+	log.Printf("🔍 Scanning for archives to decompress...")
 
 	err := filepath.Walk(downloadDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -640,7 +641,7 @@ func (s *RestoreService) decompressArchives(downloadDir string) error {
 			baseName := strings.TrimSuffix(info.Name(), ".tar.gz")
 			decompressedPath := filepath.Join(filepath.Dir(path), baseName)
 			if _, err := os.Stat(decompressedPath); err == nil {
-				log.Printf("⏭️ Skipping decompression of %s (already exists: %s)", info.Name(), baseName)
+				log.Printf("⏭️  Skipping decompression of %s (already exists: %s)", info.Name(), baseName)
 				return nil
 			}
 
@@ -654,7 +655,7 @@ func (s *RestoreService) decompressArchives(downloadDir string) error {
 
 			// Remove the archive after successful extraction
 			if err := os.Remove(path); err != nil {
-				log.Printf("⚠️ Warning: Could not remove archive %s: %v", info.Name(), err)
+				log.Printf("⚠️  Warning: Could not remove archive %s: %v", info.Name(), err)
 			} else {
 				log.Printf("✅ Successfully decompressed and removed: %s", info.Name())
 			}
@@ -774,7 +775,7 @@ func (s *RestoreService) handleGlacierRestore(ctx context.Context, bucket string
 		return nil // No Glacier objects
 	}
 
-	log.Printf("🧊 Found %d objects in Glacier storage classes that may need restore", len(glacierObjects))
+	log.Printf("🧊  Found %d objects in Glacier storage classes that may need restore", len(glacierObjects))
 
 	// Check restore status for each object
 	var needsRestore []S3Object
@@ -783,7 +784,7 @@ func (s *RestoreService) handleGlacierRestore(ctx context.Context, bucket string
 	for _, obj := range glacierObjects {
 		restored, err := utils.CheckObjectRestoreStatus(ctx, s.cfg, bucket, obj.Key)
 		if err != nil {
-			log.Printf("⚠️ Could not check restore status for %s: %v", obj.Key, err)
+			log.Printf("⚠️  Could not check restore status for %s: %v", obj.Key, err)
 			needsRestore = append(needsRestore, obj)
 			continue
 		}
@@ -803,7 +804,7 @@ func (s *RestoreService) handleGlacierRestore(ctx context.Context, bucket string
 		return nil // All objects are already restored
 	}
 
-	log.Printf("🔄 %d objects need to be restored from Glacier", len(needsRestore))
+	log.Printf("🔄  %d objects need to be restored from Glacier", len(needsRestore))
 
 	// Show objects that need restore
 	for _, obj := range needsRestore {
@@ -822,14 +823,14 @@ func (s *RestoreService) handleGlacierRestore(ctx context.Context, bucket string
 	}
 
 	// Initiate restore for objects that need it
-	log.Printf("🔄 Initiating restore for %d objects (mode: %s, expires after: %d days)", len(needsRestore), retrievalMode, restoreExpiresAfterDays)
+	log.Printf("🔄  Initiating restore for %d objects (mode: %s, expires after: %d days)", len(needsRestore), retrievalMode, restoreExpiresAfterDays)
 
 	for _, obj := range needsRestore {
-		log.Printf("🔄 Restoring: %s", obj.Key)
+		log.Printf("🔄  Restoring: %s", obj.Key)
 		if err := utils.RestoreObject(ctx, s.cfg, bucket, obj.Key, retrievalMode, restoreExpiresAfterDays); err != nil {
 			// Check if restore is already in progress
 			if strings.Contains(err.Error(), "RestoreAlreadyInProgress") {
-				log.Printf("ℹ️ Restore already in progress for: %s", obj.Key)
+				log.Printf("ℹ️  Restore already in progress for: %s", obj.Key)
 			} else {
 				log.Printf("❌ Failed to initiate restore for %s: %v", obj.Key, err)
 			}
@@ -841,11 +842,11 @@ func (s *RestoreService) handleGlacierRestore(ctx context.Context, bucket string
 	// Inform user about wait time
 	switch retrievalMode {
 	case "expedited":
-		log.Printf("⏰ Expedited retrieval typically takes 1-5 minutes for Glacier Flexible Retrieval")
+		log.Printf("⏰  Expedited retrieval typically takes 1-5 minutes for Glacier Flexible Retrieval")
 	case "bulk":
-		log.Printf("⏰ Bulk retrieval typically takes 5-12 hours for Glacier, up to 48 hours for Deep Archive")
+		log.Printf("⏰  Bulk retrieval typically takes 5-12 hours for Glacier, up to 48 hours for Deep Archive")
 	default:
-		log.Printf("⏰ Standard retrieval typically takes 3-5 hours for Glacier, up to 12 hours for Deep Archive")
+		log.Printf("⏰  Standard retrieval typically takes 3-5 hours for Glacier, up to 12 hours for Deep Archive")
 	}
 
 	return nil // Don't return error, let the process continue
@@ -876,7 +877,7 @@ func (s *RestoreService) waitForGlacierRestore(ctx context.Context, bucket strin
 		return nil
 	}
 
-	log.Printf("🔄 Auto-retry enabled: checking restore status every %d minutes", retryMinutes)
+	log.Printf("🔄  Auto-retry enabled: checking restore status every %d minutes", retryMinutes)
 
 	retryInterval := time.Duration(retryMinutes) * time.Minute
 	startTime := time.Now()
@@ -888,7 +889,7 @@ func (s *RestoreService) waitForGlacierRestore(ctx context.Context, bucket strin
 		for _, obj := range glacierObjects {
 			restored, err := utils.CheckObjectRestoreStatus(ctx, s.cfg, bucket, obj.Key)
 			if err != nil {
-				log.Printf("⚠️ Could not check restore status for %s: %v", obj.Key, err)
+				log.Printf("⚠️  Could not check restore status for %s: %v", obj.Key, err)
 				stillWaiting = append(stillWaiting, obj)
 				continue
 			}
@@ -902,7 +903,7 @@ func (s *RestoreService) waitForGlacierRestore(ctx context.Context, bucket strin
 
 		// If all objects are restored, break the loop
 		if len(stillWaiting) == 0 {
-			log.Printf("🎉 All Glacier objects are now restored and available for download")
+			log.Printf("🎉  All Glacier objects are now restored and available for download")
 			s.summary.RestoreWaitTime = time.Since(startTime)
 			return nil
 		}
@@ -912,7 +913,7 @@ func (s *RestoreService) waitForGlacierRestore(ctx context.Context, bucket strin
 		log.Printf("📊 Restore progress: %d/%d objects ready (%d still waiting)", restored, len(glacierObjects), len(stillWaiting))
 
 		// Wait before next check
-		log.Printf("⏰ Waiting %d minutes before next check...", retryMinutes)
+		log.Printf("⏰  Waiting %d minutes before next check...", retryMinutes)
 		time.Sleep(retryInterval)
 
 		// Update the list for next iteration
