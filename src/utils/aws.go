@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -28,6 +29,22 @@ func CreateAWSSession(ctx context.Context, profile, region string) (aws.Config, 
 		return aws.Config{}, err
 	}
 
+	return cfg, nil
+}
+
+// CreateAWSSession creates and validates AWS configuration with OS environment variables
+func CreateAWSSessionWithEnvironmentVariables(ctx context.Context, accessKey, secretKey, region string) (aws.Config, error) {
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		return aws.Config{}, err
+	}
+
+	if err := validateAWSCredentials(ctx, cfg); err != nil {
+		return aws.Config{}, err
+	}
 	return cfg, nil
 }
 

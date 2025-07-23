@@ -13,7 +13,7 @@ import (
 // Application constants
 const (
 	AppName    = "AWS-S3-BACKUP"
-	AppVersion = "1.3.9"
+	AppVersion = "1.4.0"
 )
 
 // Default configuration values

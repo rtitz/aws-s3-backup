@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"runtime"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -112,12 +114,35 @@ func executeMode(ctx context.Context, cfg *config.Config, flags *appFlags) error
 
 // getAWSConfig creates and validates AWS configuration
 func getAWSConfig(ctx context.Context, cfg *config.Config) (aws.Config, error) {
-	awsCfg, err := utils.CreateAWSSession(ctx, cfg.AWSProfile, cfg.AWSRegion)
-	if err != nil {
-		showAuthenticationHelp(cfg, err)
-		return aws.Config{}, fmt.Errorf("❌ authentication failed")
+	// Check for environment variables for access key and secret access key
+	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+
+	// If environment variables are set, use them
+	if accessKey != "" && secretKey != "" {
+		fmt.Printf("🔑 Using AWS credentials from environment variables...\n")
+		awsCfg, err := utils.CreateAWSSessionWithEnvironmentVariables(ctx, accessKey, secretKey, cfg.AWSRegion)
+		if err != nil {
+			showAuthenticationHelp(cfg, err)
+			return aws.Config{}, fmt.Errorf("❌ authentication failed")
+		}
+		return awsCfg, nil
+	} else {
+		// Get the current operating system
+		os := runtime.GOOS
+		if os == "windows" {
+			fmt.Printf("🔑 Environment variables $Env:AWS_ACCESS_KEY_ID and $Env:AWS_SECRET_ACCESS_KEY not found.\n")
+		} else {
+			fmt.Printf("🔑 Environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY not found.\n")
+		}
+		fmt.Printf("🔑 Using AWS credentials from AWS CLI profile...\n")
+		awsCfg, err := utils.CreateAWSSession(ctx, cfg.AWSProfile, cfg.AWSRegion)
+		if err != nil {
+			showAuthenticationHelp(cfg, err)
+			return aws.Config{}, fmt.Errorf("❌ authentication failed")
+		}
+		return awsCfg, nil
 	}
-	return awsCfg, nil
 }
 
 // showAuthenticationHelp displays detailed AWS authentication troubleshooting
