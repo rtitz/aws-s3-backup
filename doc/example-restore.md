@@ -57,7 +57,7 @@ Generated: 'generated-restore-input.json'
 
 Do you want to continue with restore, without editing generated input JSON? [y/N]: y
 
-⬇️ Downloading: backup/Users/rtitz/test-directory.tar.gz (2.30 KB)
+⬇️ Downloading: backup/test-directory/test-directory.tar.gz (2.30 KB)
 ✅ Successfully downloaded: test-directory.tar.gz
 ⬇️ Downloading: backup/my-input.json (1.2 KB)
 ✅ Successfully downloaded: my-input.json
@@ -94,7 +94,7 @@ AWS-S3-BACKUP 1.4.1
 MODE: RESTORE
 REGION: us-east-1
 
-⬇️ Downloading: backup/Users/rtitz/test-directory.tar.gz
+⬇️ Downloading: backup/test-directory/test-directory.tar.gz
 ✅ Successfully downloaded: test-directory.tar.gz
 ⬇️ Downloading: backup/my-input.json
 ✅ Successfully downloaded: my-input.json

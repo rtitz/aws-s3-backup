@@ -183,25 +183,14 @@ func (s *BackupService) encryptParts(parts []string, secret string) ([]string, e
 }
 
 func (s *BackupService) buildS3Path(task config.Task, contentPath string) string {
-	// Apply trimming to the full content path, then get parent directory
-	trimmedContentPath := utils.TrimPathPrefix(contentPath, task.TrimBeginningOfPathInS3)
-	parentPath := filepath.Dir(trimmedContentPath)
-
-	// Clean up the parent path to avoid empty or "." paths
-	if parentPath == "." || parentPath == "" {
-		parentPath = ""
-	} else {
-		parentPath = strings.Trim(parentPath, "/")
-	}
-
-	if task.S3Prefix == "" {
-		return parentPath
-	}
+	// Get the last directory name from content path
+	contentSubdir := filepath.Base(contentPath)
 	
-	if parentPath == "" {
-		return utils.NormalizePath(task.S3Prefix)
+	// Build path with content subdirectory
+	if task.S3Prefix == "" {
+		return contentSubdir
 	}
-	return utils.NormalizePath(task.S3Prefix) + "/" + parentPath
+	return utils.NormalizePath(task.S3Prefix) + "/" + contentSubdir
 }
 
 func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket, s3Path string, storageClass types.StorageClass, tmpDir string, dryRun bool) error {

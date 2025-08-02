@@ -212,7 +212,7 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json genera
 
 ### dryrun
   * **Backup mode**: Performs all operations except S3 uploads - creates archives, splits files, encrypts data
-  * **Local file sorting**: Files are organized in `TmpStorageToBuildArchives/{bucket-name}/` exactly as they would appear in S3
+  * **Local file sorting**: Files are organized in `TmpStorageToBuildArchives/{bucket-name}/` with content subdirectories exactly as they would appear in S3
   * **Smart directory handling**: Reuses existing bucket directories, only adds suffix if file conflicts exist
   * **Efficient storage**: Files are moved (not copied) to avoid duplication
   * **Restore mode**: Uses local directory as bucket source, skips downloads but performs decryption/combination
@@ -261,7 +261,8 @@ For more info about the different StorageClasses and AWS S3 pricing in general s
 
 ### TrimBeginningOfPathInS3 variable
   * Default value (also if unset!) is: "" (empty)
-  * If your content path is for example: "/home/rtitz/tmp/pico/" and TrimBeginningOfPathInS3 is for example: "/home/rtitz/" then "/home/rtitz/" will be removed (trimmed) from the S3 path. (Result in S3 will be: s3://my-s3-backup-bucket/backup/tmp/pico.tar.gz)
+  * **Note**: This parameter is no longer used in the current version. S3 paths are now organized by the last directory name of each content path
+  * For content path "/home/rtitz/tmp/pico/", the S3 path will be: s3://my-s3-backup-bucket/backup/pico/pico.tar.gz
 
 ### EncryptionSecret variable
   * Default value (also if unset!) is: "" (Encryption disabled / Nothing will be encrypted)

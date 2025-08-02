@@ -104,8 +104,8 @@ REGION: DRY-RUN
 📦 Creating archive: test-directory.tar.gz
 ➡️ Adding to archive: test-directory/NEW
 ✅ Archive created successfully: test-directory.tar.gz
-⬆️ [DRY-RUN] Would upload (1/4): test-directory.tar.gz (2.30 KB) to s3://my-s3-backup-bucket/backup/test-directory.tar.gz
-📁 [DRY-RUN] Sorted locally: /Users/rtitz/tmp/my-s3-backup-bucket/backup/test-directory.tar.gz
+⬆️ [DRY-RUN] Would upload (1/4): test-directory.tar.gz (2.30 KB) to s3://my-s3-backup-bucket/backup/test-directory/test-directory.tar.gz
+📁 [DRY-RUN] Sorted locally: /Users/rtitz/tmp/my-s3-backup-bucket/backup/test-directory/test-directory.tar.gz
 ⬆️ [DRY-RUN] Would upload additional file: my-input.json
 🧽 [DRY-RUN] Files moved to bucket directory in /Users/rtitz/tmp - no cleanup needed
 
@@ -137,7 +137,7 @@ MODE: BACKUP
 [DRY-RUN] Would upload additional file: my-input.json to s3://my-s3-backup-bucket/backup/my-input.json
 ```
 
-  * ✅ Everything in 'Content' part of the my-input.json is uploaded to S3 bucket "my-s3-backup-bucket" and placed with their full paths into folder "backup" in this bucket.
+  * ✅ Everything in 'Content' part of the my-input.json is uploaded to S3 bucket "my-s3-backup-bucket" and organized into subdirectories based on the last directory name of each content path within the "backup" folder.
   * 🔄 **Smart uploads**: If you run the same backup again, existing files will be skipped automatically
   * ⏭️ **Skip existing files**: Shows `⏭️ Skipping: filename (already exists in S3)` for files that don't need re-upload
   * 🌐 **Network resilience**: Automatically retries network failures for up to 12 hours
@@ -185,9 +185,12 @@ During dry-run mode, files are organized locally exactly as they would appear in
 /Users/rtitz/tmp/
 └── my-s3-backup-bucket/          # Bucket directory
     └── backup/                    # S3 prefix
-        ├── test-directory.tar.gz
-        ├── test.file.tar.gz
-        ├── test2.file.tar.gz
+        ├── test-directory/        # Content subdirectory
+        │   └── test-directory.tar.gz
+        ├── test.file/             # Content subdirectory
+        │   └── test.file.tar.gz
+        ├── test2.file/            # Content subdirectory
+        │   └── test2.file.tar.gz
         └── my-input.json
 ```
 
@@ -202,6 +205,20 @@ During dry-run mode, files are organized locally exactly as they would appear in
 - ✅ **Test configurations** - Verify `TrimBeginningOfPathInS3` and `S3Prefix` settings
 - ✅ **No duplication** - Files stored only once in final structure
 - ✅ **Consistent paths** - All content lines use the same bucket directory
+
+## 📁 Content Organization
+
+Files are organized into subdirectories based on the last directory name of each content path:
+
+**Content Path Examples:**
+- `/home/user/documents` → S3: `backup/documents/documents.tar.gz`
+- `/data/photos` → S3: `backup/photos/photos.tar.gz`  
+- `/tmp/logs` → S3: `backup/logs/logs.tar.gz`
+
+**Benefits:**
+- ✅ **Clean organization** - Each content item gets its own subdirectory
+- ✅ **Easy identification** - Subdirectory name matches the source directory
+- ✅ **Conflict prevention** - Multiple items with same name stay separated
 ## 🌐 Network Interruption Handling
 
 If network connection is lost during backup:
