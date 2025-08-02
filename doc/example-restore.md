@@ -27,7 +27,7 @@ aws-s3-backup_macos-arm64 -mode restore
 
   * Output will be similar to:
 ```
-AWS-S3-BACKUP 1.3.4
+AWS-S3-BACKUP 1.4.1
 
 MODE: RESTORE
 REGION: us-east-1
@@ -48,7 +48,7 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination
 
   * Output will be similar to:
 ```
-AWS-S3-BACKUP 1.3.4
+AWS-S3-BACKUP 1.4.1
 
 MODE: RESTORE
 REGION: us-east-1
@@ -89,7 +89,7 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination
 
   * Output will be similar to:
 ```
-AWS-S3-BACKUP 1.3.4
+AWS-S3-BACKUP 1.4.1
 
 MODE: RESTORE
 REGION: us-east-1
@@ -124,7 +124,7 @@ aws-s3-backup_macos-arm64 -mode restore -bucket /path/to/local/backup -destinati
 
   * Output for dry-run would show:
 ```
-AWS-S3-BACKUP 1.3.4
+AWS-S3-BACKUP 1.4.1
 
 MODE: RESTORE
 REGION: DRY-RUN

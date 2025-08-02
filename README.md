@@ -212,6 +212,9 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json genera
 
 ### dryrun
   * **Backup mode**: Performs all operations except S3 uploads - creates archives, splits files, encrypts data
+  * **Local file sorting**: Files are organized in `TmpStorageToBuildArchives/{bucket-name}/` exactly as they would appear in S3
+  * **Smart directory handling**: Reuses existing bucket directories, only adds suffix if file conflicts exist
+  * **Efficient storage**: Files are moved (not copied) to avoid duplication
   * **Restore mode**: Uses local directory as bucket source, skips downloads but performs decryption/combination
   * Useful for testing configurations and measuring local performance
   * No AWS credentials required in dry-run mode

@@ -17,8 +17,9 @@ import (
 )
 
 type BackupService struct {
-	cfg     aws.Config
-	summary *BackupSummary
+	cfg           aws.Config
+	summary       *BackupSummary
+	bucketDirCache map[string]string
 }
 
 type BackupSummary struct {
@@ -35,8 +36,9 @@ type BackupSummary struct {
 
 func NewBackupService(cfg aws.Config) *BackupService {
 	return &BackupService{
-		cfg:     cfg,
-		summary: &BackupSummary{},
+		cfg:            cfg,
+		summary:        &BackupSummary{},
+		bucketDirCache: make(map[string]string),
 	}
 }
 
@@ -130,14 +132,12 @@ func (s *BackupService) processContent(ctx context.Context, task config.Task, co
 	// Track preparation time
 	s.summary.PreparationTime += time.Since(prepStart)
 
-	if err := s.uploadParts(ctx, parts, task.S3Bucket, s3Path, storageClass, dryRun); err != nil {
+	if err := s.uploadParts(ctx, parts, task.S3Bucket, s3Path, storageClass, task.TmpStorageToBuildArchives, dryRun); err != nil {
 		return fmt.Errorf("failed to upload parts: %w", err)
 	}
 
 	if dryRun {
-		if cleanupTmp {
-			log.Printf("🧽 [DRY-RUN] Skipping cleanup of temporary files - files kept for inspection")
-		}
+		log.Printf("🧽 [DRY-RUN] Files moved to bucket directory in %s - no cleanup needed", task.TmpStorageToBuildArchives)
 	} else if cleanupTmp {
 		s.cleanupFiles(parts)
 	}
@@ -183,16 +183,28 @@ func (s *BackupService) encryptParts(parts []string, secret string) ([]string, e
 }
 
 func (s *BackupService) buildS3Path(task config.Task, contentPath string) string {
-	archivePath := filepath.Dir(contentPath)
-	trimmedPath := utils.TrimPathPrefix(archivePath, task.TrimBeginningOfPathInS3)
+	// Apply trimming to the full content path, then get parent directory
+	trimmedContentPath := utils.TrimPathPrefix(contentPath, task.TrimBeginningOfPathInS3)
+	parentPath := filepath.Dir(trimmedContentPath)
+
+	// Clean up the parent path to avoid empty or "." paths
+	if parentPath == "." || parentPath == "" {
+		parentPath = ""
+	} else {
+		parentPath = strings.Trim(parentPath, "/")
+	}
 
 	if task.S3Prefix == "" {
-		return trimmedPath
+		return parentPath
 	}
-	return utils.NormalizePath(task.S3Prefix) + "/" + trimmedPath
+	
+	if parentPath == "" {
+		return utils.NormalizePath(task.S3Prefix)
+	}
+	return utils.NormalizePath(task.S3Prefix) + "/" + parentPath
 }
 
-func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket, s3Path string, storageClass types.StorageClass, dryRun bool) error {
+func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket, s3Path string, storageClass types.StorageClass, tmpDir string, dryRun bool) error {
 	uploadStart := time.Now()
 	defer func() {
 		s.summary.UploadTime += time.Since(uploadStart)
@@ -210,7 +222,13 @@ func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket,
 		sizeFloat := float64(size) / (1024 * 1024) // MB
 		unit := "MB"
 
-		s3Key := s3Path + filepath.Base(part)
+		// Construct S3 key properly
+		var s3Key string
+		if s3Path == "" {
+			s3Key = filepath.Base(part)
+		} else {
+			s3Key = strings.TrimSuffix(s3Path, "/") + "/" + filepath.Base(part)
+		}
 		s.summary.TotalFiles++
 
 		// Check if object already exists in S3 - REQUIRED for safety
@@ -236,6 +254,17 @@ func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket,
 		s.summary.TotalBytes += size
 		if dryRun {
 			log.Printf("⬆️  [DRY-RUN] Would upload (%d/%d): %s (%.2f %s) to s3://%s/%s", i+1, len(parts), part, sizeFloat, unit, bucket, s3Key)
+			
+			// Create local directory structure mirroring S3
+			localS3Path := filepath.Join(s.getDryRunBucketDir(bucket, tmpDir), s3Key)
+			if err := os.MkdirAll(filepath.Dir(localS3Path), os.ModePerm); err == nil {
+				if _, err := os.Stat(part); err == nil {
+					if moveErr := s.moveFile(part, localS3Path); moveErr == nil {
+						log.Printf("📁 [DRY-RUN] Sorted locally: %s", localS3Path)
+					}
+				}
+			}
+			
 			s.summary.SuccessfulUploads++
 		} else {
 			log.Printf("⬆️  Uploading (%d/%d): %s (%.2f %s)", i+1, len(parts), part, sizeFloat, unit)
@@ -342,6 +371,37 @@ func (s *BackupService) uploadAdditionalFiles(ctx context.Context, tasks []confi
 func (s *BackupService) cleanupFiles(files []string) {
 	for _, file := range files {
 		os.Remove(file)
+	}
+}
+
+// moveFile is only used during dry-run to create local S3 structure
+func (s *BackupService) moveFile(src, dst string) error {
+	return os.Rename(src, dst)
+}
+
+// getDryRunBucketDir is only used during dry-run to get bucket directory path
+func (s *BackupService) getDryRunBucketDir(bucket, tmpDir string) string {
+	cacheKey := tmpDir + "|" + bucket
+	if cachedDir, exists := s.bucketDirCache[cacheKey]; exists {
+		return cachedDir
+	}
+	
+	bucketDir := filepath.Join(tmpDir, bucket)
+	if stat, err := os.Stat(bucketDir); os.IsNotExist(err) {
+		s.bucketDirCache[cacheKey] = bucketDir
+		return bucketDir
+	} else if err == nil && stat.IsDir() {
+		s.bucketDirCache[cacheKey] = bucketDir
+		return bucketDir // Directory exists, reuse it
+	}
+	
+	// File with same name exists, add suffix
+	for i := 1; ; i++ {
+		suffixedDir := fmt.Sprintf("%s-%d", bucketDir, i)
+		if _, err := os.Stat(suffixedDir); os.IsNotExist(err) {
+			s.bucketDirCache[cacheKey] = suffixedDir
+			return suffixedDir
+		}
 	}
 }
 

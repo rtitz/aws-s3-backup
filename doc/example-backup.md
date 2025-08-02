@@ -68,7 +68,7 @@ aws-s3-backup_macos-arm64 -json my-input.json -dryrun
 
   * 📝 Output will be similar to:
 ```
-AWS-S3-BACKUP 1.3.4
+AWS-S3-BACKUP 1.4.1
 
 MODE: BACKUP
 REGION: us-east-1
@@ -96,7 +96,7 @@ REGION: us-east-1
 
   * 📋 Dry-run output would show:
 ```
-AWS-S3-BACKUP 1.3.4
+AWS-S3-BACKUP 1.4.1
 
 MODE: BACKUP
 REGION: DRY-RUN
@@ -104,8 +104,10 @@ REGION: DRY-RUN
 📦 Creating archive: test-directory.tar.gz
 ➡️ Adding to archive: test-directory/NEW
 ✅ Archive created successfully: test-directory.tar.gz
-⬆️ [DRY-RUN] Would upload (1/4): test-directory.tar.gz (2.30 KB)
+⬆️ [DRY-RUN] Would upload (1/4): test-directory.tar.gz (2.30 KB) to s3://my-s3-backup-bucket/backup/test-directory.tar.gz
+📁 [DRY-RUN] Sorted locally: /Users/rtitz/tmp/my-s3-backup-bucket/backup/test-directory.tar.gz
 ⬆️ [DRY-RUN] Would upload additional file: my-input.json
+🧽 [DRY-RUN] Files moved to bucket directory in /Users/rtitz/tmp - no cleanup needed
 
 ==================================================
 📋 BACKUP SUMMARY (DRY-RUN)
@@ -124,7 +126,7 @@ REGION: DRY-RUN
 
   * 📋 Dry-run output would show:
 ```
-AWS-S3-BACKUP 1.3.1
+AWS-S3-BACKUP 1.4.1
 
 MODE: BACKUP
 
@@ -174,6 +176,32 @@ When running the same backup multiple times:
 ```
 
 This prevents unnecessary uploads and reduces costs significantly.
+## 📁 Dry-Run Local File Sorting
+
+During dry-run mode, files are organized locally exactly as they would appear in S3:
+
+**Directory Structure Created:**
+```
+/Users/rtitz/tmp/
+└── my-s3-backup-bucket/          # Bucket directory
+    └── backup/                    # S3 prefix
+        ├── test-directory.tar.gz
+        ├── test.file.tar.gz
+        ├── test2.file.tar.gz
+        └── my-input.json
+```
+
+**Smart Directory Handling:**
+- **First run**: Creates `/tmp/my-s3-backup-bucket/`
+- **Subsequent runs**: Reuses the same directory
+- **File conflicts**: If a file named `my-s3-backup-bucket` exists, creates `my-s3-backup-bucket-1/`
+- **Efficient storage**: Files are moved (not copied) to avoid duplication
+
+**Benefits:**
+- ✅ **Preview S3 structure** - See exactly how files will be organized
+- ✅ **Test configurations** - Verify `TrimBeginningOfPathInS3` and `S3Prefix` settings
+- ✅ **No duplication** - Files stored only once in final structure
+- ✅ **Consistent paths** - All content lines use the same bucket directory
 ## 🌐 Network Interruption Handling
 
 If network connection is lost during backup:

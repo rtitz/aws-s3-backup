@@ -304,19 +304,14 @@ func checkGlacierRestoreStatus(restore *string) bool {
 
 // ValidateBucketExistsWithRegion checks if bucket exists and returns its region and updated config
 func ValidateBucketExistsWithRegion(ctx context.Context, cfg aws.Config, bucket string) (string, aws.Config, error) {
-	client := s3.NewFromConfig(cfg)
-
-	// First validate bucket exists
-	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{
-		Bucket: &bucket,
-	})
-
-	if err != nil {
-		return handleBucketCreation(ctx, cfg, bucket)
+	// Try to get bucket location directly - this works regardless of region
+	region, updatedCfg, err := getBucketRegionAndConfig(ctx, cfg, bucket)
+	if err == nil {
+		return region, updatedCfg, nil
 	}
 
-	// Get existing bucket region
-	return getBucketRegionAndConfig(ctx, cfg, bucket)
+	// If that fails, bucket likely doesn't exist
+	return handleBucketCreation(ctx, cfg, bucket)
 }
 
 // handleBucketCreation manages bucket creation workflow
@@ -418,7 +413,11 @@ func getBucketRegionAndConfig(ctx context.Context, cfg aws.Config, bucket string
 		region = config_app.DefaultAWSRegion
 	}
 
-	return region, cfg, nil
+	// Update config with correct region
+	updatedCfg := cfg.Copy()
+	updatedCfg.Region = region
+
+	return region, updatedCfg, nil
 }
 
 // CreateBucket creates an S3 bucket with security best practices

@@ -18,6 +18,10 @@ cd src/
 go mod tidy
 bash build.sh  # Not running on Windows
 ```
+   * 📋 **build.sh** cross-compiles for multiple platforms:
+     * **Enabled**: macOS (arm64/amd64), Linux (386/amd64/arm/arm64), Windows (386/amd64/arm/arm64)
+     * **Available**: FreeBSD, NetBSD, OpenBSD, RISC-V, PowerPC64 (uncomment in build.sh)
+     * **Custom architectures**: Edit the `platforms` array in build.sh to enable additional targets
 
 ## 🧪 How to run tests
  * ▶️ Run all tests:
