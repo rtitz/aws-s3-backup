@@ -17,8 +17,8 @@ import (
 )
 
 type BackupService struct {
-	cfg           aws.Config
-	summary       *BackupSummary
+	cfg            aws.Config
+	summary        *BackupSummary
 	bucketDirCache map[string]string
 }
 
@@ -153,9 +153,15 @@ func (s *BackupService) prepareParts(archivePath string, splitMB int64, encrypti
 
 	if len(parts) > 1 {
 		os.Remove(archivePath)
-		// Create simple how-to file
+		// Create detailed how-to file with copy-paste commands
 		howToFile := archivePath + "-HowToBuild.txt"
-		err := os.WriteFile(howToFile, []byte("Use 'cat parts > combined' to rebuild"), 0644)
+		baseName := filepath.Base(archivePath)
+		instructions := fmt.Sprintf("# How to rebuild %s from parts\n\n", baseName) +
+			"# Method 1: Using cat command (Unix/Linux/macOS)\n" +
+			fmt.Sprintf("cat %s-part* > %s\n\n", baseName, baseName) +
+			"# Method 2: Using copy command (Windows)\n" +
+			fmt.Sprintf("copy /b %s-part* %s\n", baseName, baseName)
+		err := os.WriteFile(howToFile, []byte(instructions), 0644)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create how-to file: %w", err)
 		}
@@ -188,7 +194,7 @@ func (s *BackupService) buildS3Path(task config.Task, contentPath string) string
 	if task.TrimBeginningOfPathInS3 != "" {
 		processedPath = utils.TrimPathPrefix(contentPath, task.TrimBeginningOfPathInS3)
 	}
-	
+
 	// Check if contentPath is a file
 	if stat, err := os.Stat(contentPath); err == nil && !stat.IsDir() {
 		// For files, use parent directory structure without filename directory
@@ -205,13 +211,13 @@ func (s *BackupService) buildS3Path(task config.Task, contentPath string) string
 		}
 		return utils.NormalizePath(task.S3Prefix) + "/" + parentDir
 	}
-	
+
 	// For directories, use the full processed path as subdirectory structure
 	contentSubdir := strings.Trim(processedPath, "/")
 	if contentSubdir == "" {
 		contentSubdir = filepath.Base(contentPath)
 	}
-	
+
 	// Build path with content subdirectory
 	if task.S3Prefix == "" {
 		return contentSubdir
@@ -269,7 +275,7 @@ func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket,
 		s.summary.TotalBytes += size
 		if dryRun {
 			log.Printf("⬆️  [DRY-RUN] Would upload (%d/%d): %s (%.2f %s) to s3://%s/%s", i+1, len(parts), part, sizeFloat, unit, bucket, s3Key)
-			
+
 			// Create local directory structure mirroring S3
 			localS3Path := filepath.Join(s.getDryRunBucketDir(bucket, tmpDir), s3Key)
 			if err := os.MkdirAll(filepath.Dir(localS3Path), os.ModePerm); err == nil {
@@ -279,7 +285,7 @@ func (s *BackupService) uploadParts(ctx context.Context, parts []string, bucket,
 					}
 				}
 			}
-			
+
 			s.summary.SuccessfulUploads++
 		} else {
 			log.Printf("⬆️  Uploading (%d/%d): %s (%.2f %s)", i+1, len(parts), part, sizeFloat, unit)
@@ -400,7 +406,7 @@ func (s *BackupService) getDryRunBucketDir(bucket, tmpDir string) string {
 	if cachedDir, exists := s.bucketDirCache[cacheKey]; exists {
 		return cachedDir
 	}
-	
+
 	bucketDir := filepath.Join(tmpDir, bucket)
 	if stat, err := os.Stat(bucketDir); os.IsNotExist(err) {
 		s.bucketDirCache[cacheKey] = bucketDir
@@ -409,7 +415,7 @@ func (s *BackupService) getDryRunBucketDir(bucket, tmpDir string) string {
 		s.bucketDirCache[cacheKey] = bucketDir
 		return bucketDir // Directory exists, reuse it
 	}
-	
+
 	// File with same name exists, add suffix
 	for i := 1; ; i++ {
 		suffixedDir := fmt.Sprintf("%s-%d", bucketDir, i)
