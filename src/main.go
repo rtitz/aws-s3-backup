@@ -178,7 +178,7 @@ func executeBackup(ctx context.Context, awsCfg aws.Config, cfg *config.Config) e
 func executeRestore(ctx context.Context, awsCfg aws.Config, cfg *config.Config, flags *appFlags) error {
 	restoreService := services.NewRestoreService(awsCfg)
 	return restoreService.ProcessRestore(ctx, cfg.Bucket, cfg.Prefix, cfg.InputFile,
-		cfg.DownloadLocation, cfg.DryRun, flags.skipDecompression, cfg.RetrievalMode,
+		cfg.DownloadLocation, cfg.DryRun, !flags.extractArchives, cfg.RetrievalMode,
 		int32(cfg.RestoreExpiresAfterDays), int(cfg.AutoRetryDownloadMinutes), cfg.RestoreWithoutConfirmation)
 }
 
@@ -196,7 +196,7 @@ type appFlags struct {
 	awsRegion                  string
 	version                    bool
 	dryRun                     bool
-	skipDecompression          bool
+	extractArchives            bool
 }
 
 // parseFlags parses command line arguments and returns application flags
@@ -215,7 +215,7 @@ func parseFlags() *appFlags {
 	flag.StringVar(&flags.awsRegion, "region", config.DefaultAWSRegion, "AWS region")
 	flag.BoolVar(&flags.version, "version", false, "Print version")
 	flag.BoolVar(&flags.dryRun, "dryrun", false, "Test mode - skip S3 uploads")
-	flag.BoolVar(&flags.skipDecompression, "skipDecompression", false, "Skip archive decompression during restore")
+	flag.BoolVar(&flags.extractArchives, "extractArchives", false, "Extract compressed archives after download")
 	flag.Parse()
 
 	flags.mode = strings.ToLower(flags.mode)

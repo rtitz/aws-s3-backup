@@ -64,6 +64,7 @@ Do you want to continue with restore, without editing generated input JSON? [y/N
 
 🔓 Decrypting encrypted files...
 🔗 Combining split archives...
+⏭️  Skipping archive decompression (use -extractArchives to enable)
 
 ==================================================
 📊 RESTORE SUMMARY
@@ -101,6 +102,7 @@ REGION: us-east-1
 
 🔓 Decrypting encrypted files...
 🔗 Combining split archives...
+⏭️  Skipping archive decompression (use -extractArchives to enable)
 
 ==================================================
 📊 RESTORE SUMMARY
@@ -120,6 +122,12 @@ REGION: us-east-1
 ```bash
 # Test restore using local directory as bucket source
 aws-s3-backup_macos-arm64 -mode restore -bucket /path/to/local/backup -destination restore/ -dryrun
+```
+
+  * 🗜️ Here is how to extract archives after download:
+```bash
+# Extract compressed archives after download
+aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination restore/ -extractArchives
 ```
 
   * Output for dry-run would show:
@@ -151,6 +159,8 @@ REGION: DRY-RUN
 ```
 
   * 📁 Files now locate in your current directory in folder restore/
+  * 📦 **Archives remain compressed by default** - .tar.gz files are kept as-is for faster restore
+  * 🗜️ **Optional extraction** - Use `-extractArchives` to decompress archives after download
   * ✅ **Split archives are automatically combined** - no manual extraction needed
   * 🧊 **Glacier objects are automatically detected and restored** - tool will prompt for confirmation
   * ⚡ **Fast Glacier access** - Use `-retrievalMode expedited` for 1-5 minute restores from GLACIER_FLEXIBLE_RETRIEVAL
@@ -262,3 +272,37 @@ All original timestamps are preserved during restore:
 - ✅ Directory timestamps maintained  
 - ✅ File permissions restored
 - ⚠️ Non-fatal warnings if timestamps can't be set (read-only filesystems)
+
+## 🗜️ Archive Extraction Behavior
+
+By default, restored files remain as compressed .tar.gz archives for faster restore operations:
+
+**Default Restore (no extraction):**
+```
+restore/
+├── backup/
+│   ├── photos/
+│   │   └── photos.tar.gz
+│   └── documents/
+│       └── documents.tar.gz
+└── my-input.json
+```
+
+**With -extractArchives flag:**
+```
+restore/
+├── backup/
+│   ├── photos/
+│   │   ├── IMG_001.jpg
+│   │   └── IMG_002.jpg
+│   └── documents/
+│       ├── report.pdf
+│       └── notes.txt
+└── my-input.json
+```
+
+**Benefits of default behavior:**
+- ✅ **Faster restore** - No time spent on decompression
+- ✅ **Space efficient** - Compressed files take less space
+- ✅ **Selective extraction** - Extract only what you need manually
+- ✅ **Preserve archives** - Keep original backup format intact

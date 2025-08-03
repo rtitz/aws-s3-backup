@@ -173,7 +173,7 @@ func (s *RestoreService) ProcessRestore(ctx context.Context, bucket, prefix, inp
 			s.summary.Warnings++
 		}
 	} else {
-		log.Printf("⏭️  Skipping archive decompression (-skipDecompression flag set)")
+		log.Printf("⏭️  Skipping archive decompression (use -extractArchives to enable)")
 	}
 
 	s.summary.ProcessingTime = time.Since(processingStart)
@@ -639,7 +639,8 @@ func (s *RestoreService) decompressArchives(downloadDir string) error {
 		if strings.HasSuffix(info.Name(), ".tar.gz") {
 			// Check if decompressed version already exists
 			baseName := strings.TrimSuffix(info.Name(), ".tar.gz")
-			decompressedPath := filepath.Join(filepath.Dir(path), baseName)
+			parentDir := filepath.Dir(path)
+			decompressedPath := filepath.Join(parentDir, baseName)
 			if _, err := os.Stat(decompressedPath); err == nil {
 				log.Printf("⏭️  Skipping decompression of %s (already exists: %s)", info.Name(), baseName)
 				return nil
@@ -647,8 +648,8 @@ func (s *RestoreService) decompressArchives(downloadDir string) error {
 
 			log.Printf("📎 Decompressing: %s", info.Name())
 
-			// Extract to same directory
-			if err := utils.ExtractArchive(path, decompressedPath); err != nil {
+			// Extract to parent directory (same level as the tar.gz)
+			if err := utils.ExtractArchive(path, parentDir); err != nil {
 				log.Printf("❌ Failed to decompress %s: %v", info.Name(), err)
 				return nil // Continue with other files
 			}

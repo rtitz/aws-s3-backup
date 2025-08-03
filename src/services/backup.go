@@ -183,8 +183,34 @@ func (s *BackupService) encryptParts(parts []string, secret string) ([]string, e
 }
 
 func (s *BackupService) buildS3Path(task config.Task, contentPath string) string {
-	// Get the last directory name from content path
-	contentSubdir := filepath.Base(contentPath)
+	// Apply trimming if TrimBeginningOfPathInS3 is set
+	processedPath := contentPath
+	if task.TrimBeginningOfPathInS3 != "" {
+		processedPath = utils.TrimPathPrefix(contentPath, task.TrimBeginningOfPathInS3)
+	}
+	
+	// Check if contentPath is a file
+	if stat, err := os.Stat(contentPath); err == nil && !stat.IsDir() {
+		// For files, use parent directory structure without filename directory
+		parentDir := filepath.Dir(processedPath)
+		parentDir = strings.Trim(parentDir, "/")
+		if parentDir == "." || parentDir == "" {
+			if task.S3Prefix == "" {
+				return ""
+			}
+			return utils.NormalizePath(task.S3Prefix)
+		}
+		if task.S3Prefix == "" {
+			return parentDir
+		}
+		return utils.NormalizePath(task.S3Prefix) + "/" + parentDir
+	}
+	
+	// For directories, use the full processed path as subdirectory structure
+	contentSubdir := strings.Trim(processedPath, "/")
+	if contentSubdir == "" {
+		contentSubdir = filepath.Base(contentPath)
+	}
 	
 	// Build path with content subdirectory
 	if task.S3Prefix == "" {

@@ -152,6 +152,11 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination
 aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json generated-restore-input.json
 ```
 
+  * Extract archives after download (optional)
+```
+aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination Downloads/restore/ -extractArchives
+```
+
 **Note**: Split archives are automatically detected and combined back into single files during restore. No manual intervention required.
 
 ## ⚙️ Command line parameters
@@ -210,6 +215,14 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json genera
   * Restore objects from Glacier / archive storage classes to standard storage class has to be confirmed per object. If this parameter is specified, restores will be done without confirmation!
   * By default this parameter is not specified
 
+### extractArchives (only used for restore)
+  * Extract compressed archives after download
+  * **Default behavior**: Archives remain as .tar.gz files (no extraction)
+  * **With -extractArchives**: Archives are decompressed to their original structure
+  * Files are extracted to the same directory level as the archive (no additional subdirectory created)
+  * Preserves internal directory structure and timestamps
+  * Example: `aws-s3-backup -mode restore -bucket my-bucket -destination restore/ -extractArchives`
+
 ### dryrun
   * **Backup mode**: Performs all operations except S3 uploads - creates archives, splits files, encrypts data
   * **Local file sorting**: Files are organized in `TmpStorageToBuildArchives/{bucket-name}/` with content subdirectories exactly as they would appear in S3
@@ -221,6 +234,17 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json genera
   * Shows what would be uploaded/downloaded with detailed logging
   * Can also be used to create the files locally and upload them by hand somewhere else or to restore (combine and decrypt) files restored from somewhere else
 
+
+### S3Prefix variable
+  * Default value (also if unset!) is: "" (empty)
+  * **Works together with TrimBeginningOfPathInS3** - trimming is applied first, then S3Prefix is added as a prefix
+  * Acts as a "folder" prefix in your S3 bucket where all backup files will be stored
+  * **Example**: S3Prefix "backup" creates paths like `backup/content-name/file.tar.gz`
+  * **Combined example**:
+    * Content: `/var/log/apache/`
+    * TrimBeginningOfPathInS3: `/var/`
+    * S3Prefix: `server-backups`
+    * Result: `server-backups/log/apache/apache.tar.gz`
 
 ## 📄 The 'input.json' file for backups
 
@@ -261,8 +285,13 @@ For more info about the different StorageClasses and AWS S3 pricing in general s
 
 ### TrimBeginningOfPathInS3 variable
   * Default value (also if unset!) is: "" (empty)
-  * **Note**: This parameter is no longer used in the current version. S3 paths are now organized by the last directory name of each content path
-  * For content path "/home/rtitz/tmp/pico/", the S3 path will be: s3://my-s3-backup-bucket/backup/pico/pico.tar.gz
+  * **Works together with S3Prefix** - trimming is applied first, then S3Prefix is added
+  * If your content path is "/home/rtitz/tmp/pico/" and TrimBeginningOfPathInS3 is "/home/rtitz/", then "/home/rtitz/" will be removed from the path before creating the subdirectory
+  * **Example with both parameters**:
+    * Content: `/home/rtitz/data/photos/`
+    * TrimBeginningOfPathInS3: `/home/rtitz/`
+    * S3Prefix: `backup`
+    * Result: `backup/data/photos/photos.tar.gz`
 
 ### EncryptionSecret variable
   * Default value (also if unset!) is: "" (Encryption disabled / Nothing will be encrypted)
