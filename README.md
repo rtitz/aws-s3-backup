@@ -84,41 +84,21 @@ Here are the requirements in detail, in case you do not want to use the provided
 
 
 ## 🚀 Usage in general
-  * In the directory 'bin/' you will find pre-compiled executable binaries for different operating systems. You can just execute them in a terminal.
+  * In the directory 'bin/' you will find pre-compiled executable binaries for different operating systems. You can just execute them in a terminal. (cd to the download path)
   * See 'example-input.json' and build your own input.json
   * See: [Example of a backup](doc/example-backup.md)
   * See: [Example of a restore](doc/example-restore.md)
   * See the help
 
+### Make it executable (Only for macOS and Linux)
+```
+chmod +x aws-s3-backup_macos-arm64
+xattr -dr com.apple.quarantine aws-s3-backup_macos-arm64 # only needed for macOS
+```
+
 ```
 ./aws-s3-backup_macos-arm64 -help
 ```
-
-## 🛠️ Development
-
-### 🔨 Building from Source
-```bash
-# Build the application
-cd src && go build -o ../bin/aws-s3-backup .
-
-# Run tests
-cd src && go test ./...
-
-# Run tests with coverage
-cd src && go test -coverprofile=coverage.out ./...
-cd src && go tool cover -html=coverage.out -o coverage.html
-
-# Build for all platforms
-cd src && ./build.sh
-```
-
-### 📁 Code Structure
-- `config/` - Configuration management and validation
-- `services/` - Business logic services (backup, restore)
-- `utils/` - Consolidated utilities (AWS, files, crypto, archive, retry, paths)
-- `tests/` - Unit tests
-- `decrypt_manual.py` - Manual decryption script for encrypted files
-- `decrypt_openssl.sh` - Technical reference for OpenSSL decryption
 
 ## 💾 Backup your data
   * Execute with **your** input.json
@@ -390,21 +370,6 @@ The application features robust error handling:
 - **Cross-platform compatibility**: Consistent behavior across all operating systems
 - **Comprehensive summaries**: Detailed reports with timing breakdown and performance metrics
 
-## 🧪 Testing
-Run the test suite to verify functionality:
-```bash
-cd src
-go test ./...
-```
-
-For coverage reports:
-```bash
-cd src && go test -coverprofile=coverage.out ./...
-cd src && go tool cover -html=coverage.out -o coverage.html
-```
-
----
-## [Build it on your own from source](doc/build.md)
 ## 🔄 Smart Upload Behavior
 The application intelligently handles existing files:
 - **Checks before upload**: Uses HeadObject API to verify if files already exist in S3
@@ -482,3 +447,46 @@ python3 decrypt_manual.py encrypted_file.enc "your_password"
 - `decrypt_openssl.sh` - Technical reference for OpenSSL implementation
 
 ⚠️ **Keep these scripts with your backups** - they ensure your encrypted data remains accessible even if this application is no longer available.
+
+
+## 🛠️ Development
+
+### 🔨 Building from Source
+```bash
+# Build the application
+cd src && go build -o ../bin/aws-s3-backup .
+
+# Run tests
+cd src && go test ./...
+
+# Run tests with coverage
+cd src && go test -coverprofile=coverage.out ./...
+cd src && go tool cover -html=coverage.out -o coverage.html
+
+# Build for all platforms
+cd src && ./build.sh
+```
+
+### 📁 Code Structure
+- `config/` - Configuration management and validation
+- `services/` - Business logic services (backup, restore)
+- `utils/` - Consolidated utilities (AWS, files, crypto, archive, retry, paths)
+- `tests/` - Unit tests
+- `decrypt_manual.py` - Manual decryption script for encrypted files
+- `decrypt_openssl.sh` - Technical reference for OpenSSL decryption
+
+## 🧪 Testing
+Run the test suite to verify functionality:
+```bash
+cd src
+go test ./...
+```
+
+For coverage reports:
+```bash
+cd src && go test -coverprofile=coverage.out ./...
+cd src && go tool cover -html=coverage.out -o coverage.html
+```
+
+---
+## [Build it on your own from source](doc/build.md)
