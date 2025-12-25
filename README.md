@@ -91,7 +91,7 @@ Here are the requirements in detail, in case you do not want to use the provided
   * See the help
 
 ```
-aws-s3-backup_macos-arm64 -help
+./aws-s3-backup_macos-arm64 -help
 ```
 
 ## 🛠️ Development
@@ -123,38 +123,38 @@ cd src && ./build.sh
 ## 💾 Backup your data
   * Execute with **your** input.json
 ```
-aws-s3-backup_macos-arm64 -json ~/tmp/input.json
+./aws-s3-backup_macos-arm64 -json ~/tmp/input.json
 ```
 
   * Execute with **your** input.json and specify an AWS cli profile and AWS region
 ```
-aws-s3-backup_macos-arm64 -json ~/tmp/input.json -profile test -region eu-central-1
+./aws-s3-backup_macos-arm64 -json ~/tmp/input.json -profile test -region eu-central-1
 ```
 
   * Test backup locally without uploading to S3 (dry-run mode)
 ```
-aws-s3-backup_macos-arm64 -json ~/tmp/input.json -dryrun
+./aws-s3-backup_macos-arm64 -json ~/tmp/input.json -dryrun
 ```
 **NOTE:** Default AWS CLI profile is: 'default' and default AWS region is 'us-east-1'.
 
 ## 📥 Restore your backup
   * List your buckets
 ```
-aws-s3-backup_macos-arm64 -mode restore 
+./aws-s3-backup_macos-arm64 -mode restore 
 ```
 
   * Restore everything out of an bucket (and generate an input json for restore called 'generated-restore-input.json' in your current directory)
 ```
-aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination Downloads/restore/
+./aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination Downloads/restore/
 ``` 
 
 ```
-aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json generated-restore-input.json
+./aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -json generated-restore-input.json
 ```
 
   * Extract archives after download (optional)
 ```
-aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination Downloads/restore/ -extractArchives
+./aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination Downloads/restore/ -extractArchives
 ```
 
 **Note**: Split archives are automatically detected and combined back into single files during restore. No manual intervention required.
@@ -221,7 +221,7 @@ aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination
   * **With -extractArchives**: Archives are decompressed to their original structure
   * Files are extracted to the same directory level as the archive (no additional subdirectory created)
   * Preserves internal directory structure and timestamps
-  * Example: `aws-s3-backup -mode restore -bucket my-bucket -destination restore/ -extractArchives`
+  * Example: `./aws-s3-backup -mode restore -bucket my-bucket -destination restore/ -extractArchives`
 
 ### dryrun
   * **Backup mode**: Performs all operations except S3 uploads - creates archives, splits files, encrypts data

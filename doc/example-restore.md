@@ -14,7 +14,7 @@ The following example describes the restore, if you want to use this tool also f
   * In this example you are in the directoy: /Users/rtitz/
   * The following files are in this directory:
 ```text
-└── aws-s3-backup_macos-arm64 <- This is the aws-s3-backup executable, nothing else is required here.
+└── ./aws-s3-backup_macos-arm64 <- This is the aws-s3-backup executable, nothing else is required here.
 ```
 
   * 📁 Here is how to list buckets:
@@ -22,7 +22,7 @@ The following example describes the restore, if you want to use this tool also f
 export AWS_ACCESS_KEY_ID="AKXXXXXXXXX"
 export AWS_SECRET_ACCESS_KEY="XXXXXXXXXXXXXXXXX"
 
-aws-s3-backup_macos-arm64 -mode restore
+./aws-s3-backup_macos-arm64 -mode restore
 ```
 
   * Output will be similar to:
@@ -43,7 +43,7 @@ Available buckets:
 export AWS_ACCESS_KEY_ID="AKXXXXXXXXX" # Only needed if not already done in previous command
 export AWS_SECRET_ACCESS_KEY="XXXXXXXXXXXXXXXXX" # Only needed if not already done in previous command
 
-aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination restore/
+./aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination restore/
 ```
 
   * Output will be similar to:
@@ -85,7 +85,7 @@ Do you want to continue with restore, without editing generated input JSON? [y/N
 export AWS_ACCESS_KEY_ID="AKXXXXXXXXX" # Only needed if not already done in previous command
 export AWS_SECRET_ACCESS_KEY="XXXXXXXXXXXXXXXXX" # Only needed if not already done in previous command
 
-aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination restore/ -json generated-restore-input.json
+./aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination restore/ -json generated-restore-input.json
 ```
 
   * Output will be similar to:
@@ -121,13 +121,13 @@ REGION: us-east-1
   * 📋 Here is how to test restore with dry-run:
 ```bash
 # Test restore using local directory as bucket source
-aws-s3-backup_macos-arm64 -mode restore -bucket /path/to/local/backup -destination restore/ -dryrun
+./aws-s3-backup_macos-arm64 -mode restore -bucket /path/to/local/backup -destination restore/ -dryrun
 ```
 
   * 🗜️ Here is how to extract archives after download:
 ```bash
 # Extract compressed archives after download
-aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination restore/ -extractArchives
+./aws-s3-backup_macos-arm64 -mode restore -bucket my-s3-backup-bucket -destination restore/ -extractArchives
 ```
 
   * Output for dry-run would show:
@@ -176,7 +176,7 @@ REGION: DRY-RUN
 ### Restore with Glacier Objects (Interactive)
 ```bash
 # Tool will detect Glacier objects and ask for confirmation
-aws-s3-backup_macos-arm64 -mode restore -bucket my-glacier-bucket -destination restore/
+./aws-s3-backup_macos-arm64 -mode restore -bucket my-glacier-bucket -destination restore/
 ```
 
 Output will show:
@@ -200,13 +200,13 @@ Do you want to restore these 3 objects from Glacier storage? [y/N]: y
 ### Expedited Restore (Fast)
 ```bash
 # Use expedited mode for GLACIER_FLEXIBLE_RETRIEVAL (1-5 minutes)
-aws-s3-backup_macos-arm64 -mode restore -bucket my-glacier-bucket -destination restore/ -retrievalMode expedited -restoreWithoutConfirmation
+./aws-s3-backup_macos-arm64 -mode restore -bucket my-glacier-bucket -destination restore/ -retrievalMode expedited -restoreWithoutConfirmation
 ```
 
 ### Auto-Retry Restore
 ```bash
 # Automatically retry every 5 minutes until objects are available
-aws-s3-backup_macos-arm64 -mode restore -bucket my-glacier-bucket -destination restore/ -autoRetryDownloadMinutes 5 -restoreWithoutConfirmation
+./aws-s3-backup_macos-arm64 -mode restore -bucket my-glacier-bucket -destination restore/ -autoRetryDownloadMinutes 5 -restoreWithoutConfirmation
 ```
 
 Output shows progress:

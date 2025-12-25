@@ -5,7 +5,7 @@
   * In this example you are in the directoy: /Users/rtitz/
   * The following files are in this directory:
 ```text
-├── aws-s3-backup_macos-arm64 <- This is the aws-s3-backup executable
+├── ./aws-s3-backup_macos-arm64 <- This is the aws-s3-backup executable
 ├── dir <- This is a directory containing files and sub directories
 │   ├── dir1 <- This is an empty directory
 │   ├── dir2 <- This is a directory containing files
@@ -60,10 +60,10 @@ export AWS_ACCESS_KEY_ID="AKXXXXXXXXX"
 export AWS_SECRET_ACCESS_KEY="XXXXXXXXXXXXXXXXX"
 
 # Normal backup
-aws-s3-backup_macos-arm64 -json my-input.json
+./aws-s3-backup_macos-arm64 -json my-input.json
 
 # Or test with dry-run (no S3 upload)
-aws-s3-backup_macos-arm64 -json my-input.json -dryrun 
+./aws-s3-backup_macos-arm64 -json my-input.json -dryrun 
 ```
 
   * 📝 Output will be similar to:
