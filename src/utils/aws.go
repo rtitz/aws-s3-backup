@@ -10,7 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	config_app "github.com/rtitz/aws-s3-backup/config"
@@ -80,12 +81,12 @@ func UploadFile(ctx context.Context, cfg aws.Config, filePath, bucket, key strin
 	}
 	defer file.Close()
 
-	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
-	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
+	uploader := transfermanager.New(s3.NewFromConfig(cfg))
+	_, err = uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
 		Bucket:       &bucket,
 		Key:          &key,
 		Body:         file,
-		StorageClass: storageClass,
+		StorageClass: tmtypes.StorageClass(storageClass),
 	})
 
 	if err != nil {

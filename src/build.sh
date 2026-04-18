@@ -13,7 +13,7 @@ platforms=( \
  \
 "windows/386" \
 "windows/amd64" \
-"windows/arm" \
+#"windows/arm" \ # Support removed in Go 1.26
 "windows/arm64" \
 # \
 #"freebsd/386" \
